@@ -1,27 +1,64 @@
-use camera_reel_service::{database::Database, run, Context};
+use camera_reel_service::{database::Database, run, Context, Settings};
 use clap::Parser;
+use s3::{creds::Credentials, Bucket, Region};
 
+const LOCAL_S3: &str = "http://localhost:9000";
 #[derive(Parser, Debug)]
 pub struct Arguments {
     #[clap(short, long, env, default_value = "5000")]
     port: u16,
 
+    #[clap(long, short, env, default_value_t = String::from("http://localhost:5000"))]
+    api_url: String,
+
     #[clap(long, short, env, default_value_t = String::from("postgres://postgres:postgres@localhost:5432/camera_reel"))]
     database_url: String,
+
+    #[clap(long, short, env, default_value_t = String::from("us-east"))]
+    aws_region: String,
+
+    #[clap(long, short, env, default_value_t = String::from(LOCAL_S3))]
+    s3_url: String,
+
+    #[clap(long, env, default_value_t = String::from("camera-reel"))]
+    s3_bucket_name: String,
 }
 
 #[actix_web::main]
-async fn main() -> std::io::Result<()> {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
 
     let Ok(database) = Database::from_url(&args.database_url).await else {
         panic!("Unable to connect to database");
     };
 
-    let context = Context {
-        port: args.port,
-        database,
+    let region = if args.s3_url == LOCAL_S3 {
+        Region::Custom {
+            region: args.aws_region,
+            endpoint: args.s3_url.to_owned(),
+        }
+    } else {
+        args.aws_region.parse()?
     };
 
-    run(context).await
+    let bucket = Bucket::new(
+        &args.s3_bucket_name,
+        region,
+        // Loads credentials form ENV variables
+        Credentials::default()?,
+    )?
+    .with_path_style();
+    let settings = Settings {
+        port: args.port,
+        bucket_url: args.s3_url,
+        api_url: args.api_url,
+    };
+
+    let context = Context {
+        settings,
+        database,
+        bucket,
+    };
+
+    Ok(run(context).await?)
 }

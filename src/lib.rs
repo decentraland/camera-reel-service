@@ -1,5 +1,6 @@
-use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
 use database::Database;
+use s3::Bucket;
 use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -7,18 +8,34 @@ use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::Subs
 mod api;
 pub mod database;
 
-pub struct Context {
+#[derive(Debug)]
+pub struct Settings {
     pub port: u16,
+    pub api_url: String,
+    pub bucket_url: String,
+}
+
+pub struct Context {
+    pub settings: Settings,
     pub database: Database,
+    pub bucket: Bucket,
 }
 
 pub async fn run(context: Context) -> std::io::Result<()> {
     initialize_tracing();
 
-    let port = context.port;
+    let port = context.settings.port;
+
+    let settings = Data::new(context.settings);
+    let bucket = Data::new(context.bucket);
+    let database = Data::new(context.database);
+
     let server = HttpServer::new(move || {
         let logger = TracingLogger::default();
         App::new()
+            .app_data(settings.clone())
+            .app_data(bucket.clone())
+            .app_data(database.clone())
             .service(live)
             .configure(api::services)
             .wrap(logger)

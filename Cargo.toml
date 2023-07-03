@@ -4,6 +4,9 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+# async 
+async-stream = "0.3"
+
 # actix
 actix-web = "4"
 actix-multipart-extract = "0.1"
@@ -17,6 +20,12 @@ sqlx = { version = "0.6", features = [
   "json",
   "chrono",
 ] }
+
+# aws
+rust-s3 = "0.33"
+
+# image
+image = "0.24"
 
 # tracing
 tracing = "0.1"
