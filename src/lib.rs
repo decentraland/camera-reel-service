@@ -2,6 +2,9 @@ use actix_web::{get, App, HttpResponse, HttpServer, Responder};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
+mod api;
+mod database;
+
 pub struct Context {
     pub port: u16,
 }
@@ -12,7 +15,10 @@ pub async fn run(context: Context) -> std::io::Result<()> {
     let port = context.port;
     let server = HttpServer::new(move || {
         let logger = TracingLogger::default();
-        App::new().service(live).wrap(logger)
+        App::new()
+            .service(live)
+            .configure(api::services)
+            .wrap(logger)
     })
     .bind(("127.0.0.1", port))?;
 
