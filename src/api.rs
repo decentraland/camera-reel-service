@@ -2,14 +2,18 @@ use actix_multipart_extract::{File, Multipart, MultipartForm};
 use actix_web::{
     delete, get, post,
     web::{self, Data, Redirect, ServiceConfig},
-    HttpResponse, Responder,
+    HttpRequest, HttpResponse, Responder,
 };
 use image::ImageFormat;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
 
-use crate::{database::Database, Image, Metadata, Settings};
+use crate::{
+    auth::{self, get_user_address_from_request},
+    database::Database,
+    Image, Metadata, Settings,
+};
 
 pub fn services(config: &mut ServiceConfig) {
     config.service(
@@ -18,7 +22,12 @@ pub fn services(config: &mut ServiceConfig) {
             .service(delete_image)
             .service(get_image)
             .service(get_metadata)
-            .service(get_user_images),
+            .service(get_user_images)
+            .wrap(auth::dcl_auth_middleware([
+                "POST:/api/images",
+                "DELETE:/api/images",
+                "GET:/api/users/{user_address}/images",
+            ])),
     );
 }
 
@@ -37,17 +46,25 @@ pub struct UploadResponse {
 #[tracing::instrument]
 #[post("/images")]
 async fn upload_image(
+    req: HttpRequest,
     bucket: Data<Bucket>,
     database: Data<Database>,
     settings: Data<Settings>,
     upload: Multipart<Upload>,
 ) -> impl Responder {
+    let request_user_address = match get_user_address_from_request(&req) {
+        Ok(address) => address,
+        Err(bad_request_response) => return bad_request_response,
+    };
+
+    if upload.metadata.photographer != request_user_address {
+        return HttpResponse::Forbidden().body("forbidden");
+    }
+
     let image = &upload.image;
     if image.content_type != "image/png" {
         return HttpResponse::BadRequest().body("invalid content type");
     }
-
-    // TODO: validate photographer
 
     // parse image and generate thumbnail
     match image::load_from_memory_with_format(&image.bytes, ImageFormat::Png) {
@@ -73,6 +90,7 @@ async fn upload_image(
         metadata: metadata.clone(),
         url: format!("{http_url}/images/{image_id}"),
     };
+
     if database.insert_image(&image).await.is_err() {
         return HttpResponse::InternalServerError().body("failed to store image metadata");
     };
@@ -84,12 +102,26 @@ async fn upload_image(
 #[tracing::instrument]
 #[delete("/images/{image_id}")]
 async fn delete_image(
+    req: HttpRequest,
     bucket: Data<Bucket>,
     database: Data<Database>,
     image_id: web::Path<String>,
 ) -> impl Responder {
+    let user_address = match database.get_image_photographer(&image_id).await {
+        Ok(image) => image,
+        Err(_) => return HttpResponse::NotFound().body("image not found"),
+    };
+
+    let request_user_address = match get_user_address_from_request(&req) {
+        Ok(address) => address,
+        Err(bad_request_response) => return bad_request_response,
+    };
+
+    if user_address != request_user_address {
+        return HttpResponse::Forbidden().body("forbidden");
+    }
+
     let image_id = image_id.into_inner();
-    // TODO: authenticate, only owner can delete the image
     if database.delete_image(&image_id).await.is_err() {
         return HttpResponse::InternalServerError().body("failed to delete image");
     };
@@ -118,12 +150,21 @@ async fn get_metadata(database: Data<Database>, image_id: web::Path<String>) -> 
 }
 
 #[tracing::instrument]
-#[get("/user/{user_address}/images")]
+#[get("/users/{user_address}/images")]
 async fn get_user_images(
+    req: HttpRequest,
     database: Data<Database>,
     user_address: web::Path<String>,
 ) -> impl Responder {
+    let request_user_address = match get_user_address_from_request(&req) {
+        Ok(address) => address,
+        Err(bad_request_response) => return bad_request_response,
+    };
+
     let user_address = user_address.into_inner();
+    if user_address != request_user_address {
+        return HttpResponse::Forbidden().body("forbidden");
+    }
     let Ok(images) = database.get_user_images(&user_address).await else {
         return HttpResponse::NotFound().body("user not found");
     };

@@ -1,38 +1,15 @@
 use serde::__private::fmt::Debug;
-use sqlx::types::chrono;
+use sqlx::types::{chrono, Uuid};
 use sqlx::Error as DBError;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
 
-use std::error::Error as StdError;
 use std::str::FromStr;
 
-use crate::{Image, Metadata};
-//
-// #[derive(Debug, Error)]
-// pub enum DBError {
-//     #[error("Unable to connect to DB")]
-//     UnableToConnect(Error),
-//
-//     #[error("Unable to migrate: {0}")]
-//     MigrationError(BoxDynError),
-//
-//     #[error("Row has incorrect data: {0}")]
-//     RowCorrupted(BoxDynError),
-//
-//     #[error("Not a UUID given")]
-//     NotUUID,
-//
-//     #[error("Not found")]
-//     RowNotFound,
-// }
+use crate::{Image, Metadata, User};
 
-/// Convenience type alias for grouping driver-specific errors
-pub type BoxDynError = Box<dyn StdError + 'static + Send + Sync>;
-
-/// Generic result data structure
 pub type DBResult<V> = Result<V, DBError>;
 
 #[derive(Debug, Clone)]
@@ -92,23 +69,30 @@ impl Database {
                 .fetch_all(&self.pool)
                 .await?;
 
-        let wearables: Vec<Wearable> = sqlx::query_as::<_, Wearable>(
-            "SELECT wearable FROM image_wearables WHERE image_id = $1",
+        let users_in_image: Vec<UserInImage> = sqlx::query_as::<_, UserInImage>(
+            "SELECT user_address FROM image_user WHERE image_id = $1",
         )
         .bind(&image.id)
         .fetch_all(&self.pool)
         .await?;
 
-        let users: Vec<User> =
-            sqlx::query_as::<_, User>("SELECT user_address FROM image_user WHERE image_id = $1")
-                .bind(&image.id)
-                .fetch_all(&self.pool)
-                .await?;
+        let mut users = vec![];
+        for user in users_in_image {
+            let user_wearables: Vec<Wearable> = sqlx::query_as::<_, Wearable>(
+                "SELECT wearable FROM user_wearables WHERE user_id = $1",
+            )
+            .bind(&user.id)
+            .fetch_all(&self.pool)
+            .await?;
+            users.push(User {
+                address: user.user_address,
+                wearables: user_wearables.into_iter().map(|w| w.wearable).collect(),
+            });
+        }
 
         Ok(Metadata {
+            users,
             tags: tags.into_iter().map(|t| t.tag_name).collect(),
-            wearables: wearables.into_iter().map(|w| w.wearable).collect(),
-            users: users.into_iter().map(|u| u.user_address).collect(),
             photographer: image.photographer.to_string(),
             location: (image.location_x, image.location_y),
             timestamp: image.created_at.timestamp(),
@@ -126,6 +110,14 @@ impl Database {
             url: image.url,
             metadata,
         })
+    }
+
+    pub async fn get_image_photographer(&self, id: &str) -> DBResult<String> {
+        let image = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(image.photographer)
     }
 
     pub async fn get_user_images(&self, user: &str) -> DBResult<Vec<Image>> {
@@ -174,20 +166,21 @@ impl Database {
                 .await?;
         }
 
-        for wearable in &image.metadata.wearables {
-            sqlx::query("INSERT INTO image_wearables (image_id, wearable) VALUES ($1, $2)")
-                .bind(&image.id)
-                .bind(wearable)
-                .execute(&mut transaction)
-                .await?;
-        }
-
         for user in &image.metadata.users {
-            sqlx::query("INSERT INTO image_user (image_id, user_address) VALUES ($1, $2)")
+            let user_id = Uuid::new_v4().to_string();
+            sqlx::query("INSERT INTO image_user (id, image_id, user_address) VALUES ($1, $2, $3)")
+                .bind(&user_id)
                 .bind(&image.id)
-                .bind(user)
+                .bind(&user.address)
                 .execute(&mut transaction)
                 .await?;
+            for wearable in &user.wearables {
+                sqlx::query("INSERT INTO user_wearables(user_id, wearable) VALUES ($1, $2)")
+                    .bind(&user_id)
+                    .bind(wearable)
+                    .execute(&mut transaction)
+                    .await?;
+            }
         }
         transaction.commit().await?;
 
@@ -216,6 +209,7 @@ struct Wearable {
 }
 
 #[derive(sqlx::FromRow)]
-struct User {
+struct UserInImage {
+    id: String,
     user_address: String,
 }

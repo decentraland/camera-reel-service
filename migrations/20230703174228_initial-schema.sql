@@ -13,12 +13,13 @@ CREATE TABLE IF NOT EXISTS image_tags (
 );
 
 CREATE TABLE IF NOT EXISTS image_users (
+    id UUID PRIMARY KEY,
     image_id UUID REFERENCES images(id) ON DELETE CASCADE,
     user_address TEXT NOT NULL
 );
 
-CREATE TABLE IF NOT EXISTS image_wearables (
-    image_id UUID REFERENCES images(id) ON DELETE CASCADE,
+CREATE TABLE IF NOT EXISTS user_wearables (
+    user_id UUID REFERENCES image_users(id) ON DELETE CASCADE,
     wearable TEXT NOT NULL
 );
 

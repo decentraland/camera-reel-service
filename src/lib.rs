@@ -6,6 +6,7 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod api;
+mod auth;
 pub mod database;
 
 #[derive(Debug)]
@@ -73,8 +74,13 @@ pub struct Image {
 pub struct Metadata {
     pub photographer: String,
     pub tags: Vec<String>,
-    pub users: Vec<String>,
-    pub wearables: Vec<String>,
+    pub users: Vec<User>,
     pub location: (i32, i32),
     pub timestamp: i64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct User {
+    pub address: String,
+    pub wearables: Vec<String>,
 }

@@ -28,9 +28,7 @@ pub struct Arguments {
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let args = Arguments::parse();
 
-    let Ok(database) = Database::from_url(&args.database_url).await else {
-        panic!("Unable to connect to database");
-    };
+    let database = Database::from_url(&args.database_url).await?;
 
     let region = if args.s3_url == LOCAL_S3 {
         Region::Custom {
@@ -48,9 +46,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Credentials::default()?,
     )?
     .with_path_style();
+
     let settings = Settings {
         port: args.port,
-        bucket_url: args.s3_url,
+        bucket_url: format!("{}/{}", args.s3_url, args.s3_bucket_name),
         api_url: args.api_url,
     };
 

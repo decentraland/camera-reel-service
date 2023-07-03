@@ -8,10 +8,13 @@ services:
       - "9001:9001"
     volumes:
       - minio_storage:/data
-    environment:
-      MINIO_ROOT_USER: minio
-      MINIO_ROOT_PASSWORD: minio
     command: server --console-address ":9001" /data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
   postgres:
     container_name: "camera_reel_db"
     image: "postgres:latest"
