@@ -4,7 +4,9 @@ use actix_web::{
     web::{self, ServiceConfig},
     HttpResponse, Responder,
 };
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+
+use crate::Metadata;
 
 pub fn services(config: &mut ServiceConfig) {
     config.service(
@@ -15,14 +17,6 @@ pub fn services(config: &mut ServiceConfig) {
             .service(get_metadata)
             .service(get_user_images),
     );
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-pub struct Metadata {
-    pub photographer: String,
-    pub tags: Vec<String>,
-    pub users: Vec<String>,
-    pub wearables: Vec<String>,
 }
 
 #[derive(Deserialize, MultipartForm, Debug)]

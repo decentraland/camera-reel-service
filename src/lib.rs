@@ -1,12 +1,15 @@
 use actix_web::{get, App, HttpResponse, HttpServer, Responder};
+use database::Database;
+use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod api;
-mod database;
+pub mod database;
 
 pub struct Context {
     pub port: u16,
+    pub database: Database,
 }
 
 pub async fn run(context: Context) -> std::io::Result<()> {
@@ -40,4 +43,21 @@ fn initialize_tracing() {
 #[get("/health/live")]
 async fn live() -> impl Responder {
     HttpResponse::Ok().json("alive")
+}
+
+#[derive(Deserialize, Serialize, Debug)]
+pub struct Image {
+    pub id: String,
+    pub url: String,
+    pub metadata: Metadata,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+pub struct Metadata {
+    pub photographer: String,
+    pub tags: Vec<String>,
+    pub users: Vec<String>,
+    pub wearables: Vec<String>,
+    pub location: (i32, i32),
+    pub timestamp: i64,
 }

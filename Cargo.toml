@@ -9,6 +9,15 @@ actix-web = "4"
 actix-multipart-extract = "0.1"
 actix-web-lab = "0.19"
 
+# database
+sqlx = { version = "0.6", features = [
+  "runtime-actix-native-tls",
+  "postgres",
+  "uuid",
+  "json",
+  "chrono",
+] }
+
 # tracing
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
@@ -19,3 +28,4 @@ serde = { version = "1.0", features = ["derive"] }
 
 # misc
 clap = { version = "4", features = ["env", "derive"] }
+thiserror = "1.0"
