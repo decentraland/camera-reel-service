@@ -63,12 +63,6 @@ impl Database {
     }
 
     async fn get_image_metadata(&self, image: &DBImage) -> DBResult<Metadata> {
-        let tags: Vec<Tag> =
-            sqlx::query_as::<_, Tag>("SELECT tag_name FROM image_tags WHERE image_id = $1")
-                .bind(&image.id)
-                .fetch_all(&self.pool)
-                .await?;
-
         let users_in_image: Vec<UserInImage> = sqlx::query_as::<_, UserInImage>(
             "SELECT user_address FROM image_user WHERE image_id = $1",
         )
@@ -92,7 +86,6 @@ impl Database {
 
         Ok(Metadata {
             users,
-            tags: tags.into_iter().map(|t| t.tag_name).collect(),
             photographer: image.photographer.to_string(),
             location: (image.location_x, image.location_y),
             timestamp: image.created_at.timestamp(),
@@ -158,14 +151,6 @@ impl Database {
             .execute(&mut transaction)
             .await?;
 
-        for tag in &image.metadata.tags {
-            sqlx::query("INSERT INTO image_tags (image_id, tag_name) VALUES ($1, $2)")
-                .bind(&image.id)
-                .bind(tag)
-                .execute(&mut transaction)
-                .await?;
-        }
-
         for user in &image.metadata.users {
             let user_id = Uuid::new_v4().to_string();
             sqlx::query("INSERT INTO image_user (id, image_id, user_address) VALUES ($1, $2, $3)")
@@ -196,11 +181,6 @@ struct DBImage {
     location_y: i32,
     url: String,
     created_at: chrono::NaiveDateTime,
-}
-
-#[derive(sqlx::FromRow)]
-struct Tag {
-    tag_name: String,
 }
 
 #[derive(sqlx::FromRow)]

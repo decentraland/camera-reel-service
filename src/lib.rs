@@ -73,7 +73,6 @@ pub struct Image {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 pub struct Metadata {
     pub photographer: String,
-    pub tags: Vec<String>,
     pub users: Vec<User>,
     pub location: (i32, i32),
     pub timestamp: i64,

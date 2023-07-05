@@ -57,15 +57,15 @@ async fn upload_image(
         Err(bad_request_response) => return bad_request_response,
     };
 
-    if !upload
-        .metadata
+    let (image, metadata) = (&upload.image, &upload.metadata);
+
+    if !metadata
         .photographer
         .eq_ignore_ascii_case(&request_user_address)
     {
         return HttpResponse::Forbidden().body("forbidden");
     }
 
-    let image = &upload.image;
     if image.content_type != "image/png" {
         return HttpResponse::BadRequest().body("invalid content type");
     }
@@ -88,8 +88,7 @@ async fn upload_image(
         return HttpResponse::InternalServerError().body("failed to upload image");
     }
 
-    let http_url = std::env::var("HTTP_URL").unwrap_or_else(|_| "http://localhost:5000".into());
-    let metadata = &upload.metadata;
+    let http_url = &settings.api_url;
 
     let image = Image {
         id: image_id.clone(),
@@ -109,9 +108,9 @@ async fn upload_image(
 #[tracing::instrument]
 #[delete("/images/{image_id}")]
 async fn delete_image(
-    req: HttpRequest,
     bucket: Data<Bucket>,
     database: Data<Database>,
+    request: HttpRequest,
     image_id: web::Path<String>,
 ) -> impl Responder {
     let user_address = match database.get_image_photographer(&image_id).await {
@@ -119,7 +118,7 @@ async fn delete_image(
         Err(_) => return HttpResponse::NotFound().body("image not found"),
     };
 
-    let request_user_address = match get_user_address_from_request(&req) {
+    let request_user_address = match get_user_address_from_request(&request) {
         Ok(address) => address,
         Err(bad_request_response) => return bad_request_response,
     };
@@ -159,21 +158,13 @@ async fn get_metadata(database: Data<Database>, image_id: web::Path<String>) -> 
 }
 
 #[tracing::instrument]
-#[get("/users/{user_address}/images")]
-async fn get_user_images(
-    req: HttpRequest,
-    database: Data<Database>,
-    user_address: web::Path<String>,
-) -> impl Responder {
-    let request_user_address = match get_user_address_from_request(&req) {
+#[get("/users/me/images")]
+async fn get_user_images(req: HttpRequest, database: Data<Database>) -> impl Responder {
+    let user_address = match get_user_address_from_request(&req) {
         Ok(address) => address,
         Err(bad_request_response) => return bad_request_response,
     };
 
-    let user_address = user_address.into_inner();
-    if !user_address.eq_ignore_ascii_case(&request_user_address) {
-        return HttpResponse::Forbidden().body("forbidden");
-    }
     let Ok(images) = database.get_user_images(&user_address).await else {
         return HttpResponse::NotFound().body("user not found");
     };

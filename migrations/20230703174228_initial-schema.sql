@@ -7,11 +7,6 @@ CREATE TABLE IF NOT EXISTS images (
     created_at TIMESTAMP DEFAULT now()
 );
 
-CREATE TABLE IF NOT EXISTS image_tags (
-    image_id UUID REFERENCES images(id) ON DELETE CASCADE,
-    tag_name TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS image_users (
     id UUID PRIMARY KEY,
     image_id UUID REFERENCES images(id) ON DELETE CASCADE,
