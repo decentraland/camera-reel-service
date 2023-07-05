@@ -73,10 +73,12 @@ async fn upload_image(
     // parse image and generate thumbnail
     match image::load_from_memory_with_format(&image.bytes, ImageFormat::Png) {
         Ok(_image) => {
-            // let thumbnail = image.thumbnail(100, 100);
-            // store thumbnail in s3?
+            // TODO: should we generate a thumbnail?
+            // TODO: let thumbnail = image.thumbnail(100, 100);
+            // TODO: store thumbnail in s3?
         }
-        Err(_) => {
+        Err(error) => {
+            tracing::error!("failed to parse image: {}", error);
             return HttpResponse::BadRequest().body("invalid image");
         }
     }
@@ -95,7 +97,8 @@ async fn upload_image(
         url: format!("{http_url}/images/{image_id}"),
     };
 
-    if database.insert_image(&image).await.is_err() {
+    if let Err(error) = database.insert_image(&image).await {
+        tracing::error!("failed to store image metadata: {}", error);
         return HttpResponse::InternalServerError().body("failed to store image metadata");
     };
 
@@ -126,10 +129,12 @@ async fn delete_image(
     }
 
     let image_id = image_id.into_inner();
-    if database.delete_image(&image_id).await.is_err() {
+    if let Err(error) = database.delete_image(&image_id).await {
+        tracing::error!("failed to delete image metadata: {}", error);
         return HttpResponse::InternalServerError().body("failed to delete image");
     };
-    if bucket.delete_object(image_id).await.is_err() {
+    if let Err(error) = bucket.delete_object(image_id).await {
+        tracing::error!("failed to delete image from bucket: {}", error);
         return HttpResponse::InternalServerError().body("failed to delete image");
     };
 
