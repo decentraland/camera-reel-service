@@ -57,7 +57,11 @@ async fn upload_image(
         Err(bad_request_response) => return bad_request_response,
     };
 
-    if upload.metadata.photographer != request_user_address {
+    if !upload
+        .metadata
+        .photographer
+        .eq_ignore_ascii_case(&request_user_address)
+    {
         return HttpResponse::Forbidden().body("forbidden");
     }
 
@@ -117,7 +121,7 @@ async fn delete_image(
         Err(bad_request_response) => return bad_request_response,
     };
 
-    if user_address != request_user_address {
+    if !user_address.eq_ignore_ascii_case(&request_user_address) {
         return HttpResponse::Forbidden().body("forbidden");
     }
 
@@ -162,7 +166,7 @@ async fn get_user_images(
     };
 
     let user_address = user_address.into_inner();
-    if user_address != request_user_address {
+    if !user_address.eq_ignore_ascii_case(&request_user_address) {
         return HttpResponse::Forbidden().body("forbidden");
     }
     let Ok(images) = database.get_user_images(&user_address).await else {
