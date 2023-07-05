@@ -160,11 +160,15 @@ impl Database {
                 .execute(&mut transaction)
                 .await?;
             for wearable in &user.wearables {
-                sqlx::query("INSERT INTO user_wearables(user_id, wearable) VALUES ($1, $2)")
-                    .bind(&user_id)
-                    .bind(wearable)
-                    .execute(&mut transaction)
-                    .await?;
+                let wearable_id = Uuid::new_v4().to_string();
+                sqlx::query(
+                    "INSERT INTO user_wearables (id, user_id, wearable) VALUES ($1, $2, $3)",
+                )
+                .bind(&wearable_id)
+                .bind(&user_id)
+                .bind(wearable)
+                .execute(&mut transaction)
+                .await?;
             }
         }
         transaction.commit().await?;

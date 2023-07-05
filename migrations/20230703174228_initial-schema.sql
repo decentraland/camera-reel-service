@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS image_users (
 );
 
 CREATE TABLE IF NOT EXISTS user_wearables (
+    id UUID PRIMARY KEY,
     user_id UUID REFERENCES image_users(id) ON DELETE CASCADE,
     wearable TEXT NOT NULL
 );
