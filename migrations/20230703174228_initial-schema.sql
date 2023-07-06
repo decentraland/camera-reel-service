@@ -6,3 +6,4 @@ CREATE TABLE IF NOT EXISTS images (
     created_at TIMESTAMP DEFAULT now()
 );
 
+CREATE INDEX IF NOT EXISTS images_user_address_idx ON images (user_address);

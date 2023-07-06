@@ -77,7 +77,7 @@ impl Database {
         limit: i64,
     ) -> DBResult<Vec<DBImage>> {
         let images = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE user_address = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
-            .bind(user)
+            .bind(user.to_lowercase())
             .bind(limit)
             .bind(offset)
             .fetch_all(&self.pool)
@@ -98,7 +98,7 @@ impl Database {
             "INSERT INTO images (id, user_address, url, metadata) VALUES ($1, $2, $3, $4, $5, $6)",
         )
         .bind(&image.id)
-        .bind(&image.metadata.user_address)
+        .bind(&image.metadata.user_address.to_lowercase())
         .bind(&image.url)
         .bind(sqlx::types::Json(&image.metadata))
         .execute(&self.pool)
