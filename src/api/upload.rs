@@ -1,11 +1,11 @@
 use actix_multipart_extract::{File, Multipart, MultipartForm};
-use actix_web::{post, web::Data, HttpRequest, HttpResponse, Responder};
+use actix_web::{post, web::Data, HttpResponse, Responder};
 use image::ImageFormat;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
 
-use crate::{auth::get_user_address_from_request, database::Database, Image, Metadata, Settings};
+use crate::{api::auth::AuthUserAddress, database::Database, Image, Metadata, Settings};
 
 #[derive(Deserialize, MultipartForm, Debug)]
 pub struct Upload {
@@ -22,23 +22,16 @@ pub struct UploadResponse {
 #[tracing::instrument]
 #[post("/images")]
 pub async fn upload_image(
-    req: HttpRequest,
+    user_address: AuthUserAddress,
     bucket: Data<Bucket>,
     database: Data<Database>,
     settings: Data<Settings>,
     upload: Multipart<Upload>,
 ) -> impl Responder {
-    let request_user_address = match get_user_address_from_request(&req) {
-        Ok(address) => address,
-        Err(bad_request_response) => return bad_request_response,
-    };
-
+    let AuthUserAddress { user_address } = user_address;
     let (image, metadata) = (&upload.image, &upload.metadata);
 
-    if !metadata
-        .user_address
-        .eq_ignore_ascii_case(&request_user_address)
-    {
+    if !metadata.user_address.eq_ignore_ascii_case(&user_address) {
         return HttpResponse::Forbidden().body("forbidden");
     }
 

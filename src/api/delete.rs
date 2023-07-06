@@ -1,28 +1,27 @@
 use actix_web::{
     delete,
     web::{Data, Path},
-    HttpRequest, HttpResponse, Responder,
+    HttpResponse, Responder,
 };
 use s3::Bucket;
 
-use crate::{auth::get_user_address_from_request, database::Database};
+use crate::{api::auth::AuthUserAddress, database::Database};
 
 #[tracing::instrument]
 #[delete("/images/{image_id}")]
 pub async fn delete_image(
+    user_address: AuthUserAddress,
     bucket: Data<Bucket>,
     database: Data<Database>,
-    request: HttpRequest,
     image_id: Path<String>,
 ) -> impl Responder {
+    let AuthUserAddress {
+        user_address: request_user_address,
+    } = user_address;
+
     let user_address = match database.get_image(&image_id).await {
         Ok(image) => image.user_address,
         Err(_) => return HttpResponse::NotFound().body("image not found"),
-    };
-
-    let request_user_address = match get_user_address_from_request(&request) {
-        Ok(address) => address,
-        Err(bad_request_response) => return bad_request_response,
     };
 
     if !user_address.eq_ignore_ascii_case(&request_user_address) {

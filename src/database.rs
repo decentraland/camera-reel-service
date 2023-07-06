@@ -73,11 +73,13 @@ impl Database {
     pub async fn get_user_images(
         &self,
         user: &str,
-        offset: u64,
-        limit: u64,
+        offset: i64,
+        limit: i64,
     ) -> DBResult<Vec<DBImage>> {
-        let images = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE user_address = $1")
+        let images = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE user_address = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
             .bind(user)
+            .bind(limit)
+            .bind(offset)
             .fetch_all(&self.pool)
             .await?;
         Ok(images)

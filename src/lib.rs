@@ -6,7 +6,6 @@ use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
 mod api;
-mod auth;
 pub mod database;
 
 #[derive(Debug)]

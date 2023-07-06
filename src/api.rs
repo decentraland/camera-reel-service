@@ -1,6 +1,6 @@
 use actix_web::web::{scope, ServiceConfig};
 
-use crate::{auth, database::DBImage, Image};
+use crate::{database::DBImage, Image};
 
 use self::{
     delete::delete_image,
@@ -8,6 +8,7 @@ use self::{
     upload::upload_image,
 };
 
+mod auth;
 mod delete;
 mod get;
 mod upload;
@@ -19,12 +20,7 @@ pub fn services(config: &mut ServiceConfig) {
             .service(delete_image)
             .service(get_image)
             .service(get_metadata)
-            .service(get_user_images)
-            .wrap(auth::dcl_auth_middleware([
-                "POST:/api/images",
-                "DELETE:/api/images",
-                "GET:/api/users/{user_address}/images",
-            ])),
+            .service(get_user_images),
     );
 }
 
