@@ -676,6 +676,7 @@ dependencies = [
  "image",
  "rust-s3",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror",
  "tracing",

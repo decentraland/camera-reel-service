@@ -64,6 +64,7 @@ async fn live() -> impl Responder {
 }
 
 #[derive(Deserialize, Serialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct Image {
     pub id: String,
     pub url: String,
@@ -71,15 +72,34 @@ pub struct Image {
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct Metadata {
-    pub photographer: String,
-    pub users: Vec<User>,
-    pub location: (i32, i32),
-    pub timestamp: i64,
+    pub user_name: String,
+    pub user_address: String,
+    pub date_time: i64,
+    pub realm: String,
+    pub scene: Scene,
+    pub visible_people: Vec<User>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Scene {
+    pub name: String,
+    pub location: Location,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
+pub struct Location {
+    pub x: i32,
+    pub y: i32,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone)]
+#[serde(rename_all = "camelCase")]
 pub struct User {
-    pub address: String,
+    pub user_name: String,
+    pub user_address: String,
     pub wearables: Vec<String>,
 }

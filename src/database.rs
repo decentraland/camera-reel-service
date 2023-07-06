@@ -1,5 +1,5 @@
 use serde::__private::fmt::Debug;
-use sqlx::types::{chrono, Uuid};
+use sqlx::types::chrono;
 use sqlx::Error as DBError;
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
@@ -8,7 +8,7 @@ use sqlx::{
 
 use std::str::FromStr;
 
-use crate::{Image, Metadata, User};
+use crate::{Image, Metadata};
 
 pub type DBResult<V> = Result<V, DBError>;
 
@@ -62,74 +62,25 @@ impl Database {
         }
     }
 
-    async fn get_image_metadata(&self, image: &DBImage) -> DBResult<Metadata> {
-        let users_in_image: Vec<UserInImage> = sqlx::query_as::<_, UserInImage>(
-            "SELECT user_address FROM image_user WHERE image_id = $1",
-        )
-        .bind(&image.id)
-        .fetch_all(&self.pool)
-        .await?;
+    pub async fn get_image(&self, id: &str) -> DBResult<DBImage> {
+        let image = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE id = $1")
+            .bind(id)
+            .fetch_one(&self.pool)
+            .await?;
+        Ok(image)
+    }
 
-        let mut users = vec![];
-        for user in users_in_image {
-            let user_wearables: Vec<Wearable> = sqlx::query_as::<_, Wearable>(
-                "SELECT wearable FROM user_wearables WHERE user_id = $1",
-            )
-            .bind(&user.id)
+    pub async fn get_user_images(
+        &self,
+        user: &str,
+        offset: u64,
+        limit: u64,
+    ) -> DBResult<Vec<DBImage>> {
+        let images = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE user_address = $1")
+            .bind(user)
             .fetch_all(&self.pool)
             .await?;
-            users.push(User {
-                address: user.user_address,
-                wearables: user_wearables.into_iter().map(|w| w.wearable).collect(),
-            });
-        }
-
-        Ok(Metadata {
-            users,
-            photographer: image.photographer.to_string(),
-            location: (image.location_x, image.location_y),
-            timestamp: image.created_at.timestamp(),
-        })
-    }
-
-    pub async fn get_image(&self, id: &str) -> DBResult<Image> {
-        let image = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE id = $1")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?;
-        let metadata = self.get_image_metadata(&image).await?;
-        Ok(Image {
-            id: image.id,
-            url: image.url,
-            metadata,
-        })
-    }
-
-    pub async fn get_image_photographer(&self, id: &str) -> DBResult<String> {
-        let image = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE id = $1")
-            .bind(id)
-            .fetch_one(&self.pool)
-            .await?;
-        Ok(image.photographer)
-    }
-
-    pub async fn get_user_images(&self, user: &str) -> DBResult<Vec<Image>> {
-        let images: Vec<DBImage> =
-            sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE photographer = $1")
-                .bind(user)
-                .fetch_all(&self.pool)
-                .await?;
-
-        let mut result = vec![];
-        for image in images {
-            let metadata = self.get_image_metadata(&image).await?;
-            result.push(Image {
-                id: image.id,
-                url: image.url,
-                metadata,
-            });
-        }
-        Ok(result)
+        Ok(images)
     }
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {
@@ -141,59 +92,25 @@ impl Database {
     }
 
     pub async fn insert_image(&self, image: &Image) -> DBResult<()> {
-        let mut transaction = self.pool.begin().await?;
-        sqlx::query("INSERT INTO images (id, photographer, location_x, location_y, url) VALUES ($1, $2, $3, $4, $5, $6)")
-            .bind(&image.id)
-            .bind(&image.metadata.photographer)
-            .bind(image.metadata.location.0)
-            .bind(image.metadata.location.1)
-            .bind(&image.url)
-            .execute(&mut transaction)
-            .await?;
-
-        for user in &image.metadata.users {
-            let user_id = Uuid::new_v4().to_string();
-            sqlx::query("INSERT INTO image_user (id, image_id, user_address) VALUES ($1, $2, $3)")
-                .bind(&user_id)
-                .bind(&image.id)
-                .bind(&user.address)
-                .execute(&mut transaction)
-                .await?;
-            for wearable in &user.wearables {
-                let wearable_id = Uuid::new_v4().to_string();
-                sqlx::query(
-                    "INSERT INTO user_wearables (id, user_id, wearable) VALUES ($1, $2, $3)",
-                )
-                .bind(&wearable_id)
-                .bind(&user_id)
-                .bind(wearable)
-                .execute(&mut transaction)
-                .await?;
-            }
-        }
-        transaction.commit().await?;
+        sqlx::query(
+            "INSERT INTO images (id, user_address, url, metadata) VALUES ($1, $2, $3, $4, $5, $6)",
+        )
+        .bind(&image.id)
+        .bind(&image.metadata.user_address)
+        .bind(&image.url)
+        .bind(sqlx::types::Json(&image.metadata))
+        .execute(&self.pool)
+        .await?;
 
         Ok(())
     }
 }
 
 #[derive(sqlx::FromRow)]
-struct DBImage {
-    id: String,
-    photographer: String,
-    location_x: i32,
-    location_y: i32,
-    url: String,
-    created_at: chrono::NaiveDateTime,
-}
-
-#[derive(sqlx::FromRow)]
-struct Wearable {
-    wearable: String,
-}
-
-#[derive(sqlx::FromRow)]
-struct UserInImage {
-    id: String,
-    user_address: String,
+pub struct DBImage {
+    pub id: String,
+    pub user_address: String,
+    pub url: String,
+    pub created_at: chrono::NaiveDateTime,
+    pub metadata: sqlx::types::Json<Metadata>,
 }
