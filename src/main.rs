@@ -42,7 +42,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let bucket = Bucket::new(
         &args.s3_bucket_name,
         region,
-        // Loads credentials form ENV variables
+        // Loads credentials from ENV variables
         Credentials::default()?,
     )?
     .with_path_style();

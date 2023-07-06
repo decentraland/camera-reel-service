@@ -75,7 +75,7 @@ pub struct Image {
 pub struct Metadata {
     pub user_name: String,
     pub user_address: String,
-    pub date_time: i64,
+    pub date_time: String,
     pub realm: String,
     pub scene: Scene,
     pub visible_people: Vec<User>,
@@ -91,8 +91,8 @@ pub struct Scene {
 #[derive(Deserialize, Serialize, Debug, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Location {
-    pub x: i32,
-    pub y: i32,
+    pub x: String,
+    pub y: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone)]
