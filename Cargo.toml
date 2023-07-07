@@ -10,8 +10,8 @@ actix-multipart-extract = "0.1"
 actix-web-lab = "0.19"
 
 # database
-sqlx = { version = "0.6", features = [
-  "runtime-actix-native-tls",
+sqlx = { version = "0.7", features = [
+  "runtime-tokio-native-tls",
   "postgres",
   "uuid",
   "json",
@@ -37,3 +37,9 @@ serde = { version = "1.0", features = ["derive"] }
 
 # misc
 clap = { version = "4", features = ["env", "derive"] }
+
+[dev-dependencies]
+rand = "0.8"
+dcl-crypto = "0.2.1"
+actix-test = "0.1"
+reqwest = { version = "0.11", features = ["blocking", "json", "multipart"] }

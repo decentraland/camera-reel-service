@@ -8,10 +8,10 @@ use self::{
     upload::upload_image,
 };
 
-mod auth;
-mod delete;
-mod get;
-mod upload;
+pub mod auth;
+pub mod delete;
+pub mod get;
+pub mod upload;
 
 pub fn services(config: &mut ServiceConfig) {
     config.service(

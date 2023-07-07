@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
-mod api;
+pub mod api;
 pub mod database;
 
 #[derive(Debug)]
@@ -70,7 +70,7 @@ pub struct Image {
     pub metadata: Metadata,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
     pub user_name: String,
@@ -81,14 +81,14 @@ pub struct Metadata {
     pub visible_people: Vec<User>,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Scene {
     pub name: String,
     pub location: Location,
 }
 
-#[derive(Deserialize, Serialize, Debug, Clone)]
+#[derive(Deserialize, Serialize, Debug, Default, Clone)]
 #[serde(rename_all = "camelCase")]
 pub struct Location {
     pub x: String,
