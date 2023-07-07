@@ -1,14 +1,10 @@
-use std::time::{SystemTime, UNIX_EPOCH};
-
 use actix_test::TestServer;
 use actix_web::{web::Data, App};
-use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::{
     api,
     database::{Database, DatabaseOptions},
     live, Settings,
 };
-use dcl_crypto::Identity;
 use rand::{distributions::Alphanumeric, Rng};
 use s3::{
     bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration, Region,
@@ -39,41 +35,6 @@ pub fn create_test_identity() -> dcl_crypto::Identity {
      ]
     }"#,
   ).unwrap()
-}
-
-pub fn get_signed_headers(
-    identity: Identity,
-    method: &str,
-    path: &str,
-    metadata: &str,
-) -> Vec<(String, String)> {
-    let ts = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-
-    let payload = [method, path, &ts.to_string(), metadata]
-        .join(":")
-        .to_lowercase();
-
-    let authchain = identity.sign_payload(payload);
-
-    vec![
-        (
-            "X-Identity-Auth-Chain-0".to_string(),
-            serde_json::to_string(authchain.get(0).unwrap()).unwrap(),
-        ),
-        (
-            "X-Identity-Auth-Chain-1".to_string(),
-            serde_json::to_string(authchain.get(1).unwrap()).unwrap(),
-        ),
-        (
-            "X-Identity-Auth-Chain-2".to_string(),
-            serde_json::to_string(authchain.get(2).unwrap()).unwrap(),
-        ),
-        ("X-Identity-Timestamp".to_string(), ts.to_string()),
-        ("X-Identity-Metadata".to_string(), metadata.to_string()),
-    ]
 }
 
 fn create_string() -> String {
@@ -122,6 +83,7 @@ fn create_settings(bucket_name: &str) -> Settings {
         port: 5000,
         bucket_url: format!("http://127.0.0.1:9000/{bucket_name}"),
         api_url: "http://localhost:5000".to_owned(),
+        authentication: true,
     }
 }
 

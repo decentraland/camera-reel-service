@@ -6,7 +6,8 @@ edition = "2021"
 [dependencies]
 # actix
 actix-web = "4"
-actix-multipart-extract = "0.1"
+actix-multipart = "0.6"
+actix-multipart-derive = "0.6"
 actix-web-lab = "0.19"
 
 # database
@@ -31,6 +32,8 @@ tracing-actix-web = "0.7"
 
 # decentraland
 dcl-crypto-middleware-rs = { version = "0.2.1", features = ["signed_fetch"] }
+dcl-crypto = "0.2.1"
+ipfs-hasher = "0.13"
 
 # metadata
 serde = { version = "1.0", features = ["derive"] }
