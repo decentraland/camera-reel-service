@@ -145,7 +145,7 @@ async fn validate_signature_and_file_hashes(
         Ok(address) => {
             if address.to_string().to_lowercase() != user_address.to_lowercase() {
                 tracing::debug!(
-                    "expected address is {} but metadata has address {}",
+                    "expected address was {} but metadata address is {}",
                     address,
                     user_address
                 );

@@ -8,6 +8,26 @@ on:
 jobs:
   validations:
     runs-on: ubuntu-latest
+    env:
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+    services:
+      minio:
+        image: fclairamb/minio-github-actions
+        ports:
+          - 9000:9000
+      postgres:
+        image: postgres
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: camera_reel 
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
 
     steps:
       - uses: actions/checkout@v2
