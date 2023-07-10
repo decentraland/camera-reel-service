@@ -22,6 +22,9 @@ pub struct Arguments {
 
     #[clap(long, env, default_value_t = String::from("camera-reel"))]
     s3_bucket_name: String,
+
+    #[clap(long, env, default_value = "false")]
+    enable_authentication: bool,
 }
 
 #[actix_web::main]
@@ -51,6 +54,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         port: args.port,
         bucket_url: format!("{}/{}", args.s3_url, args.s3_bucket_name),
         api_url: args.api_url,
+        authentication: args.enable_authentication,
     };
 
     let context = Context {

@@ -1,10 +1,11 @@
 use serde::__private::fmt::Debug;
-use sqlx::types::chrono;
-use sqlx::Error as DBError;
+use sqlx::pool::PoolConnection;
+use sqlx::types::{chrono, Uuid};
 use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
+use sqlx::{Error as DBError, Postgres};
 
 use std::str::FromStr;
 
@@ -43,6 +44,10 @@ impl Database {
         Self { pool }
     }
 
+    pub async fn get_connection(&self) -> DBResult<PoolConnection<Postgres>> {
+        self.pool.acquire().await
+    }
+
     async fn migrate(&self) -> Result<(), sqlx::migrate::MigrateError> {
         sqlx::migrate!("./migrations").run(&self.pool).await
     }
@@ -64,7 +69,7 @@ impl Database {
 
     pub async fn get_image(&self, id: &str) -> DBResult<DBImage> {
         let image = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE id = $1")
-            .bind(id)
+            .bind(parse_uuid(id)?)
             .fetch_one(&self.pool)
             .await?;
         Ok(image)
@@ -87,25 +92,27 @@ impl Database {
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {
         sqlx::query("DELETE FROM images WHERE id = $1")
-            .bind(id)
+            .bind(parse_uuid(id)?)
             .execute(&self.pool)
             .await?;
         Ok(())
     }
 
     pub async fn insert_image(&self, image: &Image) -> DBResult<()> {
-        sqlx::query(
-            "INSERT INTO images (id, user_address, url, metadata) VALUES ($1, $2, $3, $4, $5, $6)",
-        )
-        .bind(&image.id)
-        .bind(&image.metadata.user_address.to_lowercase())
-        .bind(&image.url)
-        .bind(sqlx::types::Json(&image.metadata))
-        .execute(&self.pool)
-        .await?;
+        sqlx::query("INSERT INTO images (id, user_address, url, metadata) VALUES ($1, $2, $3, $4)")
+            .bind(parse_uuid(&image.id)?)
+            .bind(&image.metadata.user_address.to_lowercase())
+            .bind(&image.url)
+            .bind(sqlx::types::Json(&image.metadata))
+            .execute(&self.pool)
+            .await?;
 
         Ok(())
     }
+}
+
+fn parse_uuid(uuid: &str) -> Result<Uuid, DBError> {
+    Uuid::parse_str(uuid).map_err(|_| DBError::Protocol("Invalid UUID".to_string()))
 }
 
 #[derive(sqlx::FromRow)]

@@ -1,0 +1,129 @@
+use actix_test::TestServer;
+use actix_web::{web::Data, App};
+use camera_reel_service::{
+    api,
+    database::{Database, DatabaseOptions},
+    live, Settings,
+};
+use rand::{distributions::Alphanumeric, Rng};
+use s3::{
+    bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration, Region,
+};
+use sqlx::Executor;
+use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+
+pub fn create_test_identity() -> dcl_crypto::Identity {
+    dcl_crypto::Identity::from_json(
+      r#"{
+     "ephemeralIdentity": {
+       "address": "0x84452bbFA4ca14B7828e2F3BBd106A2bD495CD34",
+       "publicKey": "0x0420c548d960b06dac035d1daf826472eded46b8b9d123294f1199c56fa235c89f2515158b1e3be0874bfb15b42d1551db8c276787a654d0b8d7b4d4356e70fe42",
+       "privateKey": "0xbc453a92d9baeb3d10294cbc1d48ef6738f718fd31b4eb8085efe7b311299399"
+     },
+     "expiration": "3021-10-16T22:32:29.626Z",
+     "authChain": [
+       {
+         "type": "SIGNER",
+         "payload": "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5",
+         "signature": ""
+       },
+       {
+         "type": "ECDSA_EPHEMERAL",
+         "payload": "Decentraland Login\nEphemeral address: 0x84452bbFA4ca14B7828e2F3BBd106A2bD495CD34\nExpiration: 3021-10-16T22:32:29.626Z",
+         "signature": "0x39dd4ddf131ad2435d56c81c994c4417daef5cf5998258027ef8a1401470876a1365a6b79810dc0c4a2e9352befb63a9e4701d67b38007d83ffc4cd2b7a38ad51b"
+       }
+     ]
+    }"#,
+  ).unwrap()
+}
+
+fn create_string() -> String {
+    rand::thread_rng()
+        .sample_iter(&Alphanumeric)
+        .take(7)
+        .map(char::from)
+        .collect::<String>()
+        .to_lowercase()
+}
+
+async fn create_db(test_database: &str) -> Database {
+    let db_url = "postgres://postgres:postgres@localhost:5432";
+    let db_opts = DatabaseOptions::new(db_url);
+    let db = db_opts.connect().await.unwrap();
+    let connection = db.get_connection().await.unwrap();
+    connection
+        .detach()
+        .execute(format!(r#"CREATE DATABASE "{}";"#, test_database).as_str())
+        .await
+        .expect("Failed to create DB");
+
+    let url = format!("{db_url}/{test_database}");
+
+    Database::from_url(&url).await.unwrap()
+}
+
+async fn create_bucket(bucket_name: &str) -> Bucket {
+    let region = Region::Custom {
+        region: "us-east-1".to_owned(),
+        endpoint: "http://localhost:9000".to_owned(),
+    };
+    let credentials = Credentials::default().unwrap();
+    let config = BucketConfiguration::public();
+
+    let CreateBucketResponse { bucket, .. } =
+        Bucket::create_with_path_style(bucket_name, region.clone(), credentials.clone(), config)
+            .await
+            .unwrap();
+
+    bucket
+}
+
+fn create_settings(bucket_name: &str) -> Settings {
+    Settings {
+        port: 5000,
+        bucket_url: format!("http://127.0.0.1:9000/{bucket_name}"),
+        api_url: "http://localhost:5000".to_owned(),
+        authentication: true,
+    }
+}
+
+pub struct TestContext {
+    pub settings: Data<Settings>,
+    pub database: Data<Database>,
+    pub bucket: Data<Bucket>,
+}
+
+pub async fn create_context() -> TestContext {
+    std::env::set_var("AWS_ACCESS_KEY_ID", "minioadmin");
+    std::env::set_var("AWS_SECRET_ACCESS_KEY", "minioadmin");
+
+    let test_bucket = format!("camera-reel-{}", create_string());
+    TestContext {
+        settings: Data::new(create_settings(&test_bucket)),
+        database: Data::new(create_db(&test_bucket).await),
+        bucket: Data::new(create_bucket(&test_bucket).await),
+    }
+}
+
+fn initialize_tracing() {
+    let directives =
+        std::env::var("RUST_LOG").unwrap_or_else(|_| "camera-reel-service=debug".into());
+    _ = tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::new(directives))
+        .with(tracing_subscriber::fmt::layer())
+        .try_init();
+}
+
+pub async fn create_test_server() -> TestServer {
+    initialize_tracing();
+    let context = create_context().await;
+
+    actix_test::start(move || {
+        App::new()
+            .app_data(context.settings.clone())
+            .app_data(context.bucket.clone())
+            .app_data(context.database.clone())
+            .service(live)
+            .configure(api::services)
+    })
+}
