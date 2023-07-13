@@ -50,9 +50,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     )?
     .with_path_style();
 
+    let s3_url = if args.s3_url.ends_with('/') {
+        args.s3_url.to_string()
+    } else {
+        let mut s3_url = args.s3_url.to_string();
+        s3_url.remove(args.s3_url.len() - 1);
+        s3_url
+    };
+
     let settings = Settings {
         port: args.port,
-        bucket_url: format!("{}/{}", args.s3_url, args.s3_bucket_name),
+        bucket_url: format!("{}", s3_url),
         api_url: args.api_url,
         authentication: args.enable_authentication,
     };

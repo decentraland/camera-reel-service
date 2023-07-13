@@ -89,8 +89,15 @@ pub async fn upload_image(
     }
 
     let image_id = Uuid::new_v4().to_string();
-    let image_name = upload.image.file_name.as_ref().unwrap_or(&image_id);
-    if let Err(error) = bucket.put_object(image_name, image_bytes).await {
+    let image_name = format!(
+        "{image_id}-{}",
+        &upload
+            .image
+            .file_name
+            .as_ref()
+            .unwrap_or(&"image.png".to_string())
+    );
+    if let Err(error) = bucket.put_object(image_name.clone(), image_bytes).await {
         tracing::error!("failed to upload image: {}", error);
         return HttpResponse::InternalServerError().body("failed to upload image");
     }
@@ -99,7 +106,7 @@ pub async fn upload_image(
 
     let image = Image {
         id: image_id.clone(),
-        url: format!("{http_url}/images/{image_name}"),
+        url: format!("{http_url}/api/images/{image_name}"),
         metadata: metadata.clone(),
     };
 
