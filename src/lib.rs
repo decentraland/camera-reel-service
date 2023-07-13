@@ -41,7 +41,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
             .configure(api::services)
             .wrap(logger)
     })
-    .bind(("127.0.0.1", port))?;
+    .bind(("0.0.0.0", port))?;
 
     tracing::debug!("listening on port: {port}");
 
