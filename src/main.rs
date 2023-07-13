@@ -63,5 +63,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bucket,
     };
 
-    Ok(run(context).await?)
+    Ok(run(context).await.map_err(|e| {
+        tracing::debug!("app finished with error: {:?}", e);
+        e
+    })?)
 }
