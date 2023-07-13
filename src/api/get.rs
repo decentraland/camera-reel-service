@@ -18,13 +18,16 @@ async fn get_image(settings: Data<Settings>, image_id: Path<String>) -> impl Res
 #[get("/images/{image_id}/metadata")]
 async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl Responder {
     let image_id = image_id.into_inner();
-    let Ok(image) = database.get_image(&image_id).await else {
-        return HttpResponse::NotFound().body("image not found");
-    };
-
-    let image: Image = image.into();
-
-    HttpResponse::Ok().json(image)
+    match database.get_image(&image_id).await {
+        Ok(image) => {
+            let image: Image = image.into();
+            HttpResponse::Ok().json(image)
+        }
+        Err(e) => {
+            tracing::debug!("Image not found: {e:?}");
+            HttpResponse::NotFound().body("image not found")
+        }
+    }
 }
 
 #[derive(Deserialize, Debug)]

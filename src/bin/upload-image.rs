@@ -36,7 +36,7 @@ async fn main() {
     let image_bytes = include_bytes!("../../tests/resources/scene-thumbnail.png").to_vec();
     let image_hash = ipfs_hasher.compute(&image_bytes);
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
-        .file_name("image.png")
+        .file_name("scene-thumbnail.png")
         .mime_str("image/png")
         .unwrap();
 
@@ -63,9 +63,9 @@ async fn main() {
     // fill form
     let form = reqwest::multipart::Form::new();
     let form = form
+        // .part("authchain", authchain_part)
         .part("image", image_file_part)
-        .part("metadata", metadata_part)
-        .part("authchain", authchain_part);
+        .part("metadata", metadata_part);
 
     let address = "https://camera-reel-service.decentraland.zone";
     let response = reqwest::Client::new()
