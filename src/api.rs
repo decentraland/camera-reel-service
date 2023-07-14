@@ -27,7 +27,7 @@ pub fn services(config: &mut ServiceConfig) {
 impl From<DBImage> for Image {
     fn from(value: DBImage) -> Self {
         Self {
-            id: value.id,
+            id: value.id.to_string(),
             url: value.url,
             metadata: value.metadata.0,
         }

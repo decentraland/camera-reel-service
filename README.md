@@ -25,7 +25,7 @@ $ just run-services
 
 In order to run the Camera Reel service:
 ```console
-$ cargo run
+$ cargo run --bin camera-reel-service
 ```
 
 Also, you can run it in watch mode by installing `cargo-watch` and using the command to run the server:

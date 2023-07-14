@@ -117,7 +117,7 @@ fn parse_uuid(uuid: &str) -> Result<Uuid, DBError> {
 
 #[derive(sqlx::FromRow)]
 pub struct DBImage {
-    pub id: String,
+    pub id: Uuid,
     pub user_address: String,
     pub url: String,
     pub created_at: chrono::NaiveDateTime,

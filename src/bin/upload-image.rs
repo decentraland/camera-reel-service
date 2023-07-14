@@ -63,11 +63,12 @@ async fn main() {
     // fill form
     let form = reqwest::multipart::Form::new();
     let form = form
-        // .part("authchain", authchain_part)
+        .part("authchain", authchain_part)
         .part("image", image_file_part)
         .part("metadata", metadata_part);
 
-    let address = "https://camera-reel-service.decentraland.zone";
+    // let address = "https://camera-reel-service.decentraland.zone";
+    let address = "http://127.0.0.1:3000";
     let response = reqwest::Client::new()
         .post(&format!("{}/api/images", address))
         .multipart(form)
