@@ -59,7 +59,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         args.s3_url.to_string()
     } else {
         let mut s3_url = args.s3_url.to_string();
-        s3_url.remove(args.s3_url.len());
+        s3_url.remove(args.s3_url.len() - 1);
         s3_url
     };
 
