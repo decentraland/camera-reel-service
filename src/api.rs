@@ -1,3 +1,4 @@
+use actix_cors::Cors;
 use actix_web::web::{scope, ServiceConfig};
 
 use crate::{database::DBImage, Image};
@@ -14,13 +15,21 @@ pub mod get;
 pub mod upload;
 
 pub fn services(config: &mut ServiceConfig) {
+    let cors = Cors::default()
+        .allow_any_origin()
+        .allow_any_header()
+        .expose_any_header()
+        .allowed_methods(vec!["GET", "POST", "DELETE"])
+        .max_age(300);
+
     config.service(
         scope("/api")
             .service(upload_image)
             .service(delete_image)
             .service(get_image)
             .service(get_metadata)
-            .service(get_user_images),
+            .service(get_user_images)
+            .wrap(cors),
     );
 }
 
