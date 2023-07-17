@@ -9,6 +9,7 @@ actix-web = "4"
 actix-multipart = "0.6"
 actix-multipart-derive = "0.6"
 actix-web-lab = "0.19"
+actix-cors = "0.6"
 
 # database
 sqlx = { version = "0.7", features = [
