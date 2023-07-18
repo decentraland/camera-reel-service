@@ -33,11 +33,11 @@ async fn main() {
     let identity = create_test_identity();
 
     // prepare image
-    let image_bytes = include_bytes!("../../tests/resources/scene-thumbnail.png").to_vec();
+    let image_bytes = include_bytes!("../../tests/resources/fall-autumn-red-season.jpg").to_vec();
     let image_hash = ipfs_hasher.compute(&image_bytes);
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
-        .file_name("scene-thumbnail.png")
-        .mime_str("image/png")
+        .file_name("fall-autumn-red-season.jpg")
+        .mime_str("image/jpeg")
         .unwrap();
 
     // prepare image metadata

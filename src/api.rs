@@ -38,6 +38,7 @@ impl From<DBImage> for Image {
         Self {
             id: value.id.to_string(),
             url: value.url,
+            thumbnail_url: value.thumbnail_url,
             metadata: value.metadata.0,
         }
     }

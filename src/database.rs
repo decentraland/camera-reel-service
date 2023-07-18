@@ -99,10 +99,11 @@ impl Database {
     }
 
     pub async fn insert_image(&self, image: &Image) -> DBResult<()> {
-        sqlx::query("INSERT INTO images (id, user_address, url, metadata) VALUES ($1, $2, $3, $4)")
+        sqlx::query("INSERT INTO images (id, user_address, url, thumbnail_url, metadata) VALUES ($1, $2, $3, $4, $5)")
             .bind(parse_uuid(&image.id)?)
             .bind(&image.metadata.user_address.to_lowercase())
             .bind(&image.url)
+            .bind(&image.thumbnail_url)
             .bind(sqlx::types::Json(&image.metadata))
             .execute(&self.pool)
             .await?;
@@ -120,6 +121,7 @@ pub struct DBImage {
     pub id: Uuid,
     pub user_address: String,
     pub url: String,
+    pub thumbnail_url: String,
     pub created_at: chrono::NaiveDateTime,
     pub metadata: sqlx::types::Json<Metadata>,
 }

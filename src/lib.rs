@@ -68,6 +68,7 @@ async fn live() -> impl Responder {
 pub struct Image {
     pub id: String,
     pub url: String,
+    pub thumbnail_url: String,
     pub metadata: Metadata,
 }
 

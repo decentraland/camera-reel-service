@@ -1,3 +1,5 @@
+use std::io::Cursor;
+
 use actix_multipart::form::{bytes::Bytes, json::Json, MultipartForm};
 use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
@@ -20,6 +22,7 @@ pub struct Upload {
 
 #[derive(Deserialize, Serialize)]
 pub struct UploadResponse {
+    #[serde(flatten)]
     pub image: Image,
 }
 
@@ -76,29 +79,42 @@ pub async fn upload_image(
         return HttpResponse::BadRequest().body("invalid image format");
     };
 
-    match image::load_from_memory_with_format(image_bytes, format) {
-        Ok(_image) => {
-            // TODO: should we generate a thumbnail?
-            // TODO: let thumbnail = image.thumbnail(100, 100);
-            // TODO: store thumbnail in s3?
+    let thumbnail = match image::load_from_memory_with_format(image_bytes, format) {
+        Ok(image) => {
+            let thumbnail = image.thumbnail(640, 360);
+            let mut buffer = Cursor::new(vec![]);
+            if let Err(error) = thumbnail.write_to(&mut buffer, format) {
+                tracing::error!("couldn't generate thumbnail: {}", error);
+                return HttpResponse::BadRequest().body("couldn't create thumbnail");
+            }
+            buffer
         }
         Err(error) => {
             tracing::error!("failed to parse image: {}", error);
             return HttpResponse::BadRequest().body("invalid image");
         }
-    }
+    };
 
     let image_id = Uuid::new_v4().to_string();
-    let image_name = format!(
-        "{image_id}-{}",
-        &upload
-            .image
-            .file_name
-            .as_ref()
-            .unwrap_or(&"image.png".to_string())
-    );
+    let image_file_name = upload
+        .image
+        .file_name
+        .clone()
+        .unwrap_or("image.png".to_string());
+
+    let image_name = format!("{image_id}-{image_file_name}");
+    let thumbnail_name = format!("{image_id}-thumbnail-{image_file_name}");
+
     if let Err(error) = bucket.put_object(image_name.clone(), image_bytes).await {
         tracing::error!("failed to upload image: {}", error);
+        return HttpResponse::InternalServerError().body("failed to upload image");
+    }
+
+    if let Err(error) = bucket
+        .put_object(thumbnail_name.clone(), &thumbnail.get_ref())
+        .await
+    {
+        tracing::error!("failed to upload thumbnail image: {}", error);
         return HttpResponse::InternalServerError().body("failed to upload image");
     }
 
@@ -107,6 +123,7 @@ pub async fn upload_image(
     let image = Image {
         id: image_id.clone(),
         url: format!("{http_url}/api/images/{image_name}"),
+        thumbnail_url: format!("{http_url}/api/images/{thumbnail_name}"),
         metadata: metadata.clone(),
     };
 

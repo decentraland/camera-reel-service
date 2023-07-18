@@ -6,7 +6,7 @@ use actix_web::{
 use actix_web_lab::extract::Query;
 use serde::Deserialize;
 
-use crate::{api::auth::AuthUserAddress, database::Database, Image, Settings};
+use crate::{database::Database, Image, Settings};
 
 #[tracing::instrument]
 #[get("/images/{image_id}")]
