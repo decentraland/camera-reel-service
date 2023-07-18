@@ -46,14 +46,34 @@ fn default_limit() -> u64 {
     20
 }
 
+// Commenting this in favour of unauthorized endpoint for testing purposes
+// Re-enable this one when is ready
+//
+// #[tracing::instrument]
+// #[get("/users/me/images")]
+// async fn get_user_images(
+//     user_address: AuthUserAddress,
+//     query_params: Query<GetImagesQuery>,
+//     database: Data<Database>,
+// ) -> impl Responder {
+//     let AuthUserAddress { user_address } = user_address;
+//     let GetImagesQuery { offset, limit } = query_params.into_inner();
+//
+//     let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
+//         return HttpResponse::NotFound().body("user not found");
+//     };
+//     let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
+//     HttpResponse::Ok().json(images)
+// }
+
 #[tracing::instrument]
-#[get("/users/me/images")]
+#[get("/users/{user_address}/images")]
 async fn get_user_images(
-    user_address: AuthUserAddress,
+    user_address: Path<String>,
     query_params: Query<GetImagesQuery>,
     database: Data<Database>,
 ) -> impl Responder {
-    let AuthUserAddress { user_address } = user_address;
+    let user_address = user_address.into_inner();
     let GetImagesQuery { offset, limit } = query_params.into_inner();
 
     let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
