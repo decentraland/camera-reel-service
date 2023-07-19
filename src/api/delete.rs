@@ -7,6 +7,19 @@ use s3::Bucket;
 
 use crate::{api::auth::AuthUserAddress, database::Database};
 
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api",
+    responses(
+        (status = 200, description = "Image deleted"),
+        (status = NOT_FOUND, description = "Image was not found"),
+        (status = FORBIDDEN, description = "Forbidden"),
+        (status = INTERNAL_SERVER_ERROR, description = "Failed to delete image"),
+    ),
+    params(
+        ("image_id" = u64, Path, description = "Image database id to delete"),
+    )
+)]
 #[tracing::instrument]
 #[delete("/images/{image_id}")]
 pub async fn delete_image(

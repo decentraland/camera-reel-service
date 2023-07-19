@@ -9,14 +9,18 @@ use ipfs_hasher::IpfsHasher;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
 use sqlx::types::Uuid;
+use utoipa::ToSchema;
 
-use crate::{database::Database, Image, Metadata, Settings};
+use crate::{api::Image, api::Metadata, database::Database, Settings};
 
-#[derive(MultipartForm, Debug)]
+#[derive(MultipartForm, Debug, ToSchema)]
 pub struct Upload {
     #[multipart(limit = "5MiB")]
+    #[schema(value_type = String, format = Binary)]
     image: Bytes,
+    #[schema(value_type = String, format = Binary)]
     metadata: Bytes,
+    #[schema(value_type = String)]
     authchain: Option<Json<AuthChain>>,
 }
 
@@ -27,6 +31,16 @@ pub struct UploadResponse {
 }
 
 #[tracing::instrument(skip(upload))]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    request_body(content = Upload, description = "Image file, metadata attached. If authentication is enabled, an AuthChain must be provided with a valid signature", content_type = "multipart/form-data"),
+    responses(
+        (status = 200, description = "Uploaded image with its metadata", body = Image),
+        (status = 400, description = "Bad Request"),
+        (status = 500, description = "Internal Server Error"),
+    )
+)]
 #[post("/images")]
 pub async fn upload_image(
     bucket: Data<Bucket>,

@@ -5,16 +5,32 @@ use actix_web::{
 };
 use actix_web_lab::extract::Query;
 use serde::Deserialize;
+use utoipa::IntoParams;
 
-use crate::{database::Database, Image, Settings};
+use crate::{api::Image, database::Database, Settings};
 
 #[tracing::instrument]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    responses(
+        (status = 200, description = "Get image", body = Image),
+    )
+)]
 #[get("/images/{image_id}")]
 async fn get_image(settings: Data<Settings>, image_id: Path<String>) -> impl Responder {
     Redirect::to(format!("{}/{}", settings.bucket_url, image_id))
 }
 
 #[tracing::instrument]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    responses(
+        (status = 200, description = "Get image metadata", body = Image),
+        (status = 404, description = "Not found")
+    )
+)]
 #[get("/images/{image_id}/metadata")]
 async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl Responder {
     let image_id = image_id.into_inner();
@@ -30,7 +46,7 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
     }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Deserialize, Debug, IntoParams)]
 struct GetImagesQuery {
     #[serde(default = "default_offset")]
     offset: u64,
@@ -50,6 +66,7 @@ fn default_limit() -> u64 {
 // Re-enable this one when is ready
 //
 // #[tracing::instrument]
+// #[utoipa::path(get, context_path = "/api")]
 // #[get("/users/me/images")]
 // async fn get_user_images(
 //     user_address: AuthUserAddress,
@@ -67,6 +84,17 @@ fn default_limit() -> u64 {
 // }
 
 #[tracing::instrument]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    params(
+        GetImagesQuery
+    ),
+    responses(
+        (status = 200, description = "List images metadatas for a given user", body = [Image]),
+        (status = 404, description = "Not found")
+    )
+)]
 #[get("/users/{user_address}/images")]
 async fn get_user_images(
     user_address: Path<String>,
