@@ -5,9 +5,9 @@ use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
 use dcl_crypto::{AuthChain, Authenticator};
 use image::guess_format;
-use ipfs_hasher::IpfsHasher;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
+use sha256::digest;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 
@@ -30,6 +30,19 @@ pub struct UploadResponse {
     pub image: Image,
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct UploadResponseError {
+    message: String,
+}
+
+impl UploadResponseError {
+    fn new(message: &str) -> Self {
+        Self {
+            message: message.to_string(),
+        }
+    }
+}
+
 #[tracing::instrument(skip(upload))]
 #[utoipa::path(
     tag = "images",
@@ -50,11 +63,11 @@ pub async fn upload_image(
 ) -> impl Responder {
     let (image_bytes, metadata_bytes) = (&upload.image.data, &upload.metadata.data);
 
-    let metadata = match parse_metadata(metadata_bytes) {
+    let metadata: Metadata = match serde_json::from_slice(metadata_bytes) {
         Ok(metadata) => metadata,
         Err(error) => {
             tracing::error!("failed to parse metadata: {}", error);
-            return HttpResponse::BadRequest().body("invalid metadata");
+            return HttpResponse::BadRequest().json(UploadResponseError::new("invalid metadata"));
         }
     };
 
@@ -70,7 +83,8 @@ pub async fn upload_image(
             AuthChainValidation::Ok => {}
             error => {
                 tracing::error!("failed to validate signature: {:?}", error);
-                return HttpResponse::BadRequest().body("invalid signature");
+                return HttpResponse::BadRequest()
+                    .json(UploadResponseError::new("invalid signature"));
             }
         }
     }
@@ -79,18 +93,22 @@ pub async fn upload_image(
         .content_type
         .as_ref()
         .map(|content_type| content_type.to_string()) else {
-        return HttpResponse::BadRequest().body("invalid content type");
+            return HttpResponse::BadRequest()
+                .json(UploadResponseError::new("invalid content type"));
+
     };
 
     match content_type.as_str() {
         "image/png" | "image/jpeg" => {}
         _ => {
-            return HttpResponse::BadRequest().body("unsupported content type");
+            return HttpResponse::BadRequest()
+                .json(UploadResponseError::new("unsupported content type"));
         }
     }
 
     let Ok(format) = guess_format(image_bytes) else {
-        return HttpResponse::BadRequest().body("invalid image format");
+        return HttpResponse::BadRequest()
+            .json(UploadResponseError::new("invalid image format"));
     };
 
     let thumbnail = match image::load_from_memory_with_format(image_bytes, format) {
@@ -99,13 +117,14 @@ pub async fn upload_image(
             let mut buffer = Cursor::new(vec![]);
             if let Err(error) = thumbnail.write_to(&mut buffer, format) {
                 tracing::error!("couldn't generate thumbnail: {}", error);
-                return HttpResponse::BadRequest().body("couldn't create thumbnail");
+                return HttpResponse::BadRequest()
+                    .json(UploadResponseError::new("couldn't create thumbnail"));
             }
             buffer
         }
         Err(error) => {
             tracing::error!("failed to parse image: {}", error);
-            return HttpResponse::BadRequest().body("invalid image");
+            return HttpResponse::BadRequest().json(UploadResponseError::new("invalid image"));
         }
     };
 
@@ -121,7 +140,8 @@ pub async fn upload_image(
 
     if let Err(error) = bucket.put_object(image_name.clone(), image_bytes).await {
         tracing::error!("failed to upload image: {}", error);
-        return HttpResponse::InternalServerError().body("failed to upload image");
+        return HttpResponse::InternalServerError()
+            .json(UploadResponseError::new("failed to upload image"));
     }
 
     if let Err(error) = bucket
@@ -129,7 +149,8 @@ pub async fn upload_image(
         .await
     {
         tracing::error!("failed to upload thumbnail image: {}", error);
-        return HttpResponse::InternalServerError().body("failed to upload image");
+        return HttpResponse::InternalServerError()
+            .json(UploadResponseError::new("failed to upload image"));
     }
 
     let http_url = &settings.api_url;
@@ -143,17 +164,12 @@ pub async fn upload_image(
 
     if let Err(error) = database.insert_image(&image).await {
         tracing::error!("failed to store image metadata: {}", error);
-        return HttpResponse::InternalServerError().body("failed to store image metadata");
+        return HttpResponse::InternalServerError()
+            .json(UploadResponseError::new("failed to store image metadata"));
     };
 
     let response = UploadResponse { image };
     HttpResponse::Ok().json(response)
-}
-
-fn parse_metadata(metadata: &[u8]) -> Result<Metadata, serde_json::Error> {
-    let metadata: Metadata = serde_json::from_slice(metadata)?;
-
-    Ok(metadata)
 }
 
 #[derive(Debug)]
@@ -174,9 +190,8 @@ async fn validate_signature_and_file_hashes(
         return AuthChainValidation::AuthChainNotFound;
     };
 
-    let ipfs_hasher = IpfsHasher::default();
-    let image_hash = ipfs_hasher.compute(image_bytes);
-    let metadata_hash = ipfs_hasher.compute(metadata_bytes);
+    let image_hash = digest(image_bytes);
+    let metadata_hash = digest(metadata_bytes);
     let payload = format!("{}-{}", image_hash, metadata_hash);
 
     let authenticator = Authenticator::new();
