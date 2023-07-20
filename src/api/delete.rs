@@ -5,7 +5,10 @@ use actix_web::{
 };
 use s3::Bucket;
 
-use crate::{api::auth::AuthUserAddress, database::Database};
+use crate::{
+    api::{auth::AuthUserAddress, ResponseError},
+    database::Database,
+};
 
 #[utoipa::path(
     tag = "images",
@@ -32,24 +35,50 @@ pub async fn delete_image(
         user_address: request_user_address,
     } = user_address;
 
-    let user_address = match database.get_image(&image_id).await {
-        Ok(image) => image.user_address,
-        Err(_) => return HttpResponse::NotFound().body("image not found"),
+    let image = match database.get_image(&image_id).await {
+        Ok(image) => image,
+        Err(_) => return HttpResponse::NotFound().json(ResponseError::new("image not found")),
     };
 
-    if !user_address.eq_ignore_ascii_case(&request_user_address) {
-        return HttpResponse::Forbidden().body("forbidden");
+    if !image
+        .user_address
+        .eq_ignore_ascii_case(&request_user_address)
+    {
+        return HttpResponse::Forbidden().json(ResponseError::new("forbidden"));
     }
 
     let image_id = image_id.into_inner();
     if let Err(error) = database.delete_image(&image_id).await {
         tracing::error!("failed to delete image metadata: {}", error);
-        return HttpResponse::InternalServerError().body("failed to delete image");
-    };
-    if let Err(error) = bucket.delete_object(image_id).await {
-        tracing::error!("failed to delete image from bucket: {}", error);
-        return HttpResponse::InternalServerError().body("failed to delete image");
+        return HttpResponse::InternalServerError()
+            .json(ResponseError::new("failed to delete image"));
     };
 
-    HttpResponse::Ok().body("image deleted")
+    match image.url.split('/').last() {
+        Some(image_file_name) => {
+            if let Err(error) = bucket.delete_object(image_file_name).await {
+                tracing::error!("failed to delete image from bucket: {}", error);
+                return HttpResponse::InternalServerError()
+                    .json(ResponseError::new("failed to delete image"));
+            };
+        }
+        None => {
+            tracing::debug!("No image to delete");
+        }
+    }
+
+    match image.thumbnail_url.split('/').last() {
+        Some(thumbnail_file_name) => {
+            if let Err(error) = bucket.delete_object(thumbnail_file_name).await {
+                tracing::error!("failed to delete thumbnail image from bucket: {}", error);
+                return HttpResponse::InternalServerError()
+                    .json(ResponseError::new("failed to delete thumbnail image"));
+            };
+        }
+        None => {
+            tracing::debug!("No thumbnail image to delete");
+        }
+    }
+
+    HttpResponse::Ok().finish()
 }

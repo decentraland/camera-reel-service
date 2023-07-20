@@ -7,7 +7,11 @@ use actix_web_lab::extract::Query;
 use serde::Deserialize;
 use utoipa::IntoParams;
 
-use crate::{api::Image, database::Database, Settings};
+use crate::{
+    api::{Image, ResponseError},
+    database::Database,
+    Settings,
+};
 
 #[tracing::instrument]
 #[utoipa::path(
@@ -41,7 +45,7 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
         }
         Err(e) => {
             tracing::debug!("Image not found: {e:?}");
-            HttpResponse::NotFound().body("image not found")
+            HttpResponse::NotFound().json(ResponseError::new("image not found"))
         }
     }
 }
@@ -105,7 +109,7 @@ async fn get_user_images(
     let GetImagesQuery { offset, limit } = query_params.into_inner();
 
     let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
-        return HttpResponse::NotFound().body("user not found");
+        return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
     let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
     HttpResponse::Ok().json(images)

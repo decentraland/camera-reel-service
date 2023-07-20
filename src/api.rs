@@ -91,3 +91,16 @@ impl From<DBImage> for Image {
         }
     }
 }
+
+#[derive(Deserialize, Serialize)]
+pub struct ResponseError {
+    message: String,
+}
+
+impl ResponseError {
+    pub fn new(message: &str) -> Self {
+        Self {
+            message: message.to_string(),
+        }
+    }
+}

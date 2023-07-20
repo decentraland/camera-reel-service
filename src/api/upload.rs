@@ -11,7 +11,12 @@ use sha256::digest;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 
-use crate::{api::Image, api::Metadata, database::Database, Settings};
+use crate::{
+    api::Image,
+    api::{Metadata, ResponseError},
+    database::Database,
+    Settings,
+};
 
 #[derive(MultipartForm, Debug, ToSchema)]
 pub struct Upload {
@@ -28,19 +33,6 @@ pub struct Upload {
 pub struct UploadResponse {
     #[serde(flatten)]
     pub image: Image,
-}
-
-#[derive(Deserialize, Serialize)]
-pub struct UploadResponseError {
-    message: String,
-}
-
-impl UploadResponseError {
-    fn new(message: &str) -> Self {
-        Self {
-            message: message.to_string(),
-        }
-    }
 }
 
 #[tracing::instrument(skip(upload))]
@@ -67,7 +59,7 @@ pub async fn upload_image(
         Ok(metadata) => metadata,
         Err(error) => {
             tracing::error!("failed to parse metadata: {}", error);
-            return HttpResponse::BadRequest().json(UploadResponseError::new("invalid metadata"));
+            return HttpResponse::BadRequest().json(ResponseError::new("invalid metadata"));
         }
     };
 
@@ -83,8 +75,7 @@ pub async fn upload_image(
             AuthChainValidation::Ok => {}
             error => {
                 tracing::error!("failed to validate signature: {:?}", error);
-                return HttpResponse::BadRequest()
-                    .json(UploadResponseError::new("invalid signature"));
+                return HttpResponse::BadRequest().json(ResponseError::new("invalid signature"));
             }
         }
     }
@@ -94,21 +85,20 @@ pub async fn upload_image(
         .as_ref()
         .map(|content_type| content_type.to_string()) else {
             return HttpResponse::BadRequest()
-                .json(UploadResponseError::new("invalid content type"));
+                .json(ResponseError::new("invalid content type"));
 
     };
 
     match content_type.as_str() {
         "image/png" | "image/jpeg" => {}
         _ => {
-            return HttpResponse::BadRequest()
-                .json(UploadResponseError::new("unsupported content type"));
+            return HttpResponse::BadRequest().json(ResponseError::new("unsupported content type"));
         }
     }
 
     let Ok(format) = guess_format(image_bytes) else {
         return HttpResponse::BadRequest()
-            .json(UploadResponseError::new("invalid image format"));
+            .json(ResponseError::new("invalid image format"));
     };
 
     let thumbnail = match image::load_from_memory_with_format(image_bytes, format) {
@@ -118,13 +108,13 @@ pub async fn upload_image(
             if let Err(error) = thumbnail.write_to(&mut buffer, format) {
                 tracing::error!("couldn't generate thumbnail: {}", error);
                 return HttpResponse::BadRequest()
-                    .json(UploadResponseError::new("couldn't create thumbnail"));
+                    .json(ResponseError::new("couldn't create thumbnail"));
             }
             buffer
         }
         Err(error) => {
             tracing::error!("failed to parse image: {}", error);
-            return HttpResponse::BadRequest().json(UploadResponseError::new("invalid image"));
+            return HttpResponse::BadRequest().json(ResponseError::new("invalid image"));
         }
     };
 
@@ -141,7 +131,7 @@ pub async fn upload_image(
     if let Err(error) = bucket.put_object(image_name.clone(), image_bytes).await {
         tracing::error!("failed to upload image: {}", error);
         return HttpResponse::InternalServerError()
-            .json(UploadResponseError::new("failed to upload image"));
+            .json(ResponseError::new("failed to upload image"));
     }
 
     if let Err(error) = bucket
@@ -150,7 +140,7 @@ pub async fn upload_image(
     {
         tracing::error!("failed to upload thumbnail image: {}", error);
         return HttpResponse::InternalServerError()
-            .json(UploadResponseError::new("failed to upload image"));
+            .json(ResponseError::new("failed to upload image"));
     }
 
     let http_url = &settings.api_url;
@@ -165,7 +155,7 @@ pub async fn upload_image(
     if let Err(error) = database.insert_image(&image).await {
         tracing::error!("failed to store image metadata: {}", error);
         return HttpResponse::InternalServerError()
-            .json(UploadResponseError::new("failed to store image metadata"));
+            .json(ResponseError::new("failed to store image metadata"));
     };
 
     let response = UploadResponse { image };
