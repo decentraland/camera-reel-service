@@ -34,7 +34,7 @@ tracing-actix-web = "0.7"
 # decentraland
 dcl-crypto-middleware-rs = { version = "0.2.1", features = ["signed_fetch"] }
 dcl-crypto = "0.2.1"
-ipfs-hasher = "0.13"
+sha256 = "1.2"
 
 # metadata
 serde = { version = "1.0", features = ["derive"] }

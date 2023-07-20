@@ -1,6 +1,6 @@
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::Metadata;
-use ipfs_hasher::IpfsHasher;
+use sha256::digest;
 
 pub fn create_test_identity() -> dcl_crypto::Identity {
     dcl_crypto::Identity::from_json(
@@ -29,12 +29,11 @@ pub fn create_test_identity() -> dcl_crypto::Identity {
 
 #[actix_web::main]
 async fn main() {
-    let ipfs_hasher = IpfsHasher::default();
     let identity = create_test_identity();
 
     // prepare image
     let image_bytes = include_bytes!("../../tests/resources/fall-autumn-red-season.jpg").to_vec();
-    let image_hash = ipfs_hasher.compute(&image_bytes);
+    let image_hash = digest(&image_bytes);
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
         .file_name("fall-autumn-red-season.jpg")
         .mime_str("image/jpeg")
@@ -46,7 +45,7 @@ async fn main() {
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
-    let metadata_hash = ipfs_hasher.compute(&metadata_json);
+    let metadata_hash = digest(&metadata_json);
     let metadata_part = reqwest::multipart::Part::bytes(metadata_json)
         .file_name("metadata.json")
         .mime_str("application/json")
@@ -67,8 +66,8 @@ async fn main() {
         .part("image", image_file_part)
         .part("metadata", metadata_part);
 
-    // let address = "https://camera-reel-service.decentraland.zone";
-    let address = "http://127.0.0.1:3000";
+    let address = "https://camera-reel-service.decentraland.zone";
+    // let address = "http://127.0.0.1:3000";
     let response = reqwest::Client::new()
         .post(&format!("{}/api/images", address))
         .multipart(form)

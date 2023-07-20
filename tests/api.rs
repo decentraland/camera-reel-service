@@ -1,6 +1,6 @@
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::Metadata;
-use ipfs_hasher::IpfsHasher;
+use sha256::digest;
 
 use crate::common::{create_test_identity, create_test_server};
 
@@ -24,12 +24,11 @@ async fn test_upload_image() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    let ipfs_hasher = IpfsHasher::default();
     let identity = create_test_identity();
 
     // prepare image
     let image_bytes = include_bytes!("./resources/image.png").to_vec();
-    let image_hash = ipfs_hasher.compute(&image_bytes);
+    let image_hash = digest(&image_bytes);
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
         .file_name("image.png")
         .mime_str("image/png")
@@ -41,7 +40,7 @@ async fn test_upload_image() {
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
-    let metadata_hash = ipfs_hasher.compute(&metadata_json);
+    let metadata_hash = digest(&metadata_json);
     let metadata_part = reqwest::multipart::Part::bytes(metadata_json)
         .file_name("metadata.json")
         .mime_str("application/json")
