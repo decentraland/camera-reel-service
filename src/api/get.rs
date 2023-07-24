@@ -102,7 +102,7 @@ pub struct GetImagesResponse {
         GetImagesQuery
     ),
     responses(
-        (status = 200, description = "List images metadatas for a given user", body = [Image]),
+        (status = 200, description = "List images metadatas for a given user", body = GetImagesResponse),
         (status = 404, description = "Not found")
     )
 )]
