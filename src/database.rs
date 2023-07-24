@@ -87,7 +87,18 @@ impl Database {
             .bind(offset)
             .fetch_all(&self.pool)
             .await?;
+
         Ok(images)
+    }
+
+    pub async fn get_user_images_count(&self, user: &str) -> DBResult<u64> {
+        let count =
+            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM images WHERE user_address = $1")
+                .bind(user.to_lowercase())
+                .fetch_one(&self.pool)
+                .await?;
+
+        Ok(count as u64)
     }
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {

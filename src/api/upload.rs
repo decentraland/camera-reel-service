@@ -135,7 +135,7 @@ pub async fn upload_image(
     }
 
     if let Err(error) = bucket
-        .put_object(thumbnail_name.clone(), &thumbnail.get_ref())
+        .put_object(thumbnail_name.clone(), thumbnail.get_ref())
         .await
     {
         tracing::error!("failed to upload thumbnail image: {}", error);

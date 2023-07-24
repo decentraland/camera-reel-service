@@ -25,6 +25,9 @@ pub struct Arguments {
 
     #[clap(long, env, default_value = "false")]
     enable_authentication: bool,
+
+    #[clap(long, env, default_value_t = 1000)]
+    max_images_per_user: u64,
 }
 
 #[actix_web::main]
@@ -65,9 +68,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let settings = Settings {
         port: args.port,
-        bucket_url: format!("{}", s3_url),
+        bucket_url: s3_url.to_string(),
         api_url: args.api_url,
         authentication: args.enable_authentication,
+        max_images_per_user: args.max_images_per_user,
     };
 
     let context = Context {

@@ -14,6 +14,7 @@ pub struct Settings {
     pub api_url: String,
     pub bucket_url: String,
     pub authentication: bool,
+    pub max_images_per_user: u64,
 }
 
 pub struct Context {

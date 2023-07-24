@@ -4,7 +4,7 @@ use actix_web::{
     HttpResponse, Responder,
 };
 use actix_web_lab::extract::Query;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use utoipa::IntoParams;
 
 use crate::{
@@ -66,6 +66,13 @@ fn default_limit() -> u64 {
     20
 }
 
+#[derive(Deserialize, Serialize)]
+pub struct GetImagesResponse {
+    pub images: Vec<Image>,
+    pub current_images: u64,
+    pub max_images: u64,
+}
+
 // Commenting this in favour of unauthorized endpoint for testing purposes
 // Re-enable this one when is ready
 //
@@ -103,14 +110,24 @@ fn default_limit() -> u64 {
 async fn get_user_images(
     user_address: Path<String>,
     query_params: Query<GetImagesQuery>,
+    settings: Data<Settings>,
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
     let GetImagesQuery { offset, limit } = query_params.into_inner();
 
+    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+        return HttpResponse::NotFound().json(ResponseError::new("user not found"));
+    };
+
     let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
+
     let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
-    HttpResponse::Ok().json(images)
+    HttpResponse::Ok().json(GetImagesResponse {
+        images,
+        current_images: images_count,
+        max_images: settings.max_images_per_user,
+    })
 }

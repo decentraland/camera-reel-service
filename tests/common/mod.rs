@@ -84,6 +84,7 @@ fn create_settings(bucket_name: &str) -> Settings {
         bucket_url: format!("http://127.0.0.1:9000/{bucket_name}"),
         api_url: "http://localhost:5000".to_owned(),
         authentication: true,
+        max_images_per_user: 1000,
     }
 }
 
