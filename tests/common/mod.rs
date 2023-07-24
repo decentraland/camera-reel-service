@@ -1,14 +1,19 @@
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use actix_test::TestServer;
 use actix_web::{web::Data, App};
+use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::{
-    api,
+    api::{self, upload::UploadResponse},
     database::{Database, DatabaseOptions},
-    live, Settings,
+    live, Metadata, Settings,
 };
+use dcl_crypto::Identity;
 use rand::{distributions::Alphanumeric, Rng};
 use s3::{
     bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration, Region,
 };
+use sha256::digest;
 use sqlx::Executor;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -127,4 +132,90 @@ pub async fn create_test_server() -> TestServer {
             .service(live)
             .configure(api::services)
     })
+}
+
+pub async fn upload_test_image(file_name: &str, address: &str) -> String {
+    let identity = create_test_identity();
+    // prepare image
+    let image_bytes = include_bytes!("../resources/image.png").to_vec();
+    let image_hash = digest(&image_bytes);
+    let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
+        .file_name(file_name.to_string())
+        .mime_str("image/png")
+        .unwrap();
+
+    // prepare image metadata
+    let metadata = Metadata {
+        user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
+        ..Default::default()
+    };
+    let metadata_json = serde_json::to_vec(&metadata).unwrap();
+    let metadata_hash = digest(&metadata_json);
+    let metadata_part = reqwest::multipart::Part::bytes(metadata_json)
+        .file_name("metadata.json")
+        .mime_str("application/json")
+        .unwrap();
+
+    // prepare authchain
+    let payload = format!("{image_hash}-{metadata_hash}");
+    let authchain = identity.sign_payload(payload);
+    let auth_chain_json = serde_json::to_vec(&authchain).unwrap();
+    let authchain_part = reqwest::multipart::Part::bytes(auth_chain_json)
+        .mime_str("application/json")
+        .unwrap();
+
+    // fill form
+    let form = reqwest::multipart::Form::new();
+    let form = form
+        .part("image", image_file_part)
+        .part("metadata", metadata_part)
+        .part("authchain", authchain_part);
+
+    let response = reqwest::Client::new()
+        .post(&format!("http://{}/api/images", address))
+        .multipart(form)
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+
+    let response: UploadResponse = response.json().await.unwrap();
+
+    response.image.id
+}
+
+pub fn get_signed_headers(
+    identity: Identity,
+    method: &str,
+    path: &str,
+    metadata: &str,
+) -> Vec<(String, String)> {
+    let ts = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+
+    let payload = [method, path, &ts.to_string(), metadata]
+        .join(":")
+        .to_lowercase();
+
+    let authchain = identity.sign_payload(payload);
+
+    vec![
+        (
+            "X-Identity-Auth-Chain-0".to_string(),
+            serde_json::to_string(authchain.get(0).unwrap()).unwrap(),
+        ),
+        (
+            "X-Identity-Auth-Chain-1".to_string(),
+            serde_json::to_string(authchain.get(1).unwrap()).unwrap(),
+        ),
+        (
+            "X-Identity-Auth-Chain-2".to_string(),
+            serde_json::to_string(authchain.get(2).unwrap()).unwrap(),
+        ),
+        ("X-Identity-Timestamp".to_string(), ts.to_string()),
+        ("X-Identity-Metadata".to_string(), metadata.to_string()),
+    ]
 }
