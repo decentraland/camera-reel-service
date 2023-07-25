@@ -79,6 +79,7 @@ pub struct User {
     pub user_name: String,
     pub user_address: String,
     pub wearables: Vec<String>,
+    #[serde(default)]
     pub is_guest: bool,
 }
 
