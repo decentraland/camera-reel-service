@@ -1,7 +1,6 @@
 use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
 use database::Database;
 use s3::Bucket;
-use serde::{Deserialize, Serialize};
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -62,47 +61,4 @@ fn initialize_tracing() {
 #[get("/health/live")]
 async fn live() -> impl Responder {
     HttpResponse::Ok().json("alive")
-}
-
-#[derive(Deserialize, Serialize, Debug)]
-#[serde(rename_all = "camelCase")]
-pub struct Image {
-    pub id: String,
-    pub url: String,
-    pub thumbnail_url: String,
-    pub metadata: Metadata,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Metadata {
-    pub user_name: String,
-    pub user_address: String,
-    pub date_time: String,
-    pub realm: String,
-    pub scene: Scene,
-    pub visible_people: Vec<User>,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Scene {
-    pub name: String,
-    pub location: Location,
-}
-
-#[derive(Deserialize, Serialize, Debug, Default, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct Location {
-    pub x: String,
-    pub y: String,
-}
-
-#[derive(Deserialize, Serialize, Debug, Clone)]
-#[serde(rename_all = "camelCase")]
-pub struct User {
-    pub user_name: String,
-    pub user_address: String,
-    pub wearables: Vec<String>,
-    pub is_guest: bool,
 }

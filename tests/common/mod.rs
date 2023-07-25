@@ -4,9 +4,9 @@ use actix_test::TestServer;
 use actix_web::{web::Data, App};
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::{
-    api::{self, upload::UploadResponse},
+    api::{self, upload::UploadResponse, Metadata},
     database::{Database, DatabaseOptions},
-    live, Metadata, Settings,
+    live, Settings,
 };
 use dcl_crypto::Identity;
 use rand::{distributions::Alphanumeric, Rng};

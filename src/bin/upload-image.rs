@@ -1,5 +1,5 @@
 use actix_web_lab::__reexports::serde_json;
-use camera_reel_service::Metadata;
+use camera_reel_service::api::Metadata;
 use sha256::digest;
 
 pub fn create_test_identity() -> dcl_crypto::Identity {
