@@ -13,7 +13,6 @@ use rand::{distributions::Alphanumeric, Rng};
 use s3::{
     bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration, Region,
 };
-use sha256::digest;
 use sqlx::Executor;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
@@ -138,7 +137,6 @@ pub async fn upload_test_image(file_name: &str, address: &str) -> String {
     let identity = create_test_identity();
     // prepare image
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
-    let image_hash = digest(&image_bytes);
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
         .file_name(file_name.to_string())
         .mime_str("image/png")
@@ -150,17 +148,8 @@ pub async fn upload_test_image(file_name: &str, address: &str) -> String {
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
-    let metadata_hash = digest(&metadata_json);
     let metadata_part = reqwest::multipart::Part::bytes(metadata_json)
         .file_name("metadata.json")
-        .mime_str("application/json")
-        .unwrap();
-
-    // prepare authchain
-    let payload = format!("{image_hash}-{metadata_hash}");
-    let authchain = identity.sign_payload(payload);
-    let auth_chain_json = serde_json::to_vec(&authchain).unwrap();
-    let authchain_part = reqwest::multipart::Part::bytes(auth_chain_json)
         .mime_str("application/json")
         .unwrap();
 
@@ -168,12 +157,18 @@ pub async fn upload_test_image(file_name: &str, address: &str) -> String {
     let form = reqwest::multipart::Form::new();
     let form = form
         .part("image", image_file_part)
-        .part("metadata", metadata_part)
-        .part("authchain", authchain_part);
+        .part("metadata", metadata_part);
 
+    let path = "/api/images";
+    let headers = get_signed_headers(identity, "post", path, "");
     let response = reqwest::Client::new()
-        .post(&format!("http://{}/api/images", address))
+        .post(&format!("http://{address}{path}"))
         .multipart(form)
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
         .send()
         .await
         .unwrap();

@@ -34,7 +34,6 @@ tracing-actix-web = "0.7"
 # decentraland
 dcl-crypto-middleware-rs = { version = "0.2.1", features = ["signed_fetch"] }
 dcl-crypto = "0.2.1"
-sha256 = "1.2"
 
 # metadata
 serde = { version = "1.0", features = ["derive"] }
@@ -51,4 +50,3 @@ utoipa-swagger-ui = { version = "3", features = ["actix-web"] }
 rand = "0.8"
 dcl-crypto = "0.2.1"
 actix-test = "0.1"
-

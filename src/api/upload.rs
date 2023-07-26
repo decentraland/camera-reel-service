@@ -1,19 +1,17 @@
 use std::io::Cursor;
 
-use actix_multipart::form::{bytes::Bytes, json::Json, MultipartForm};
+use actix_multipart::form::{bytes::Bytes, MultipartForm};
 use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
-use dcl_crypto::{AuthChain, Authenticator};
 use image::guess_format;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
-use sha256::digest;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 
 use crate::{
     api::Image,
-    api::{Metadata, ResponseError},
+    api::{auth::AuthUser, Metadata, ResponseError},
     database::Database,
     Settings,
 };
@@ -25,8 +23,6 @@ pub struct Upload {
     image: Bytes,
     #[schema(value_type = String, format = Binary)]
     metadata: Bytes,
-    #[schema(value_type = String)]
-    authchain: Option<Json<AuthChain>>,
 }
 
 #[derive(Deserialize, Serialize)]
@@ -39,7 +35,7 @@ pub struct UploadResponse {
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
-    request_body(content = Upload, description = "Image file, metadata attached. If authentication is enabled, an AuthChain must be provided with a valid signature", content_type = "multipart/form-data"),
+    request_body(content = Upload, description = "Image file and metadata in JSON format.", content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Uploaded image with its metadata", body = Image),
         (status = 400, description = "Bad Request"),
@@ -48,6 +44,7 @@ pub struct UploadResponse {
 )]
 #[post("/images")]
 pub async fn upload_image(
+    auth_user: AuthUser,
     bucket: Data<Bucket>,
     database: Data<Database>,
     settings: Data<Settings>,
@@ -63,21 +60,8 @@ pub async fn upload_image(
         }
     };
 
-    if settings.authentication {
-        match validate_signature_and_file_hashes(
-            image_bytes,
-            metadata_bytes,
-            &upload.authchain,
-            &metadata.user_address,
-        )
-        .await
-        {
-            AuthChainValidation::Ok => {}
-            error => {
-                tracing::error!("failed to validate signature: {:?}", error);
-                return HttpResponse::BadRequest().json(ResponseError::new("invalid signature"));
-            }
-        }
+    if metadata.user_address != auth_user.address {
+        return HttpResponse::BadRequest().json(ResponseError::new("invalid user address"));
     }
 
     let Some(content_type) = upload.image
@@ -160,48 +144,4 @@ pub async fn upload_image(
 
     let response = UploadResponse { image };
     HttpResponse::Ok().json(response)
-}
-
-#[derive(Debug)]
-enum AuthChainValidation {
-    Ok,
-    AuthChainNotFound,
-    InvalidSignature,
-    InvalidAddress,
-}
-
-async fn validate_signature_and_file_hashes(
-    image_bytes: &[u8],
-    metadata_bytes: &[u8],
-    authchain: &Option<Json<AuthChain>>,
-    user_address: &str,
-) -> AuthChainValidation {
-    let Some(auth_chain) = authchain.as_ref() else {
-        return AuthChainValidation::AuthChainNotFound;
-    };
-
-    let image_hash = digest(image_bytes);
-    let metadata_hash = digest(metadata_bytes);
-    let payload = format!("{}-{}", image_hash, metadata_hash);
-
-    let authenticator = Authenticator::new();
-    match authenticator.verify_signature(auth_chain, &payload).await {
-        Ok(address) => {
-            if address.to_string().to_lowercase() != user_address.to_lowercase() {
-                tracing::debug!(
-                    "expected address was {} but metadata address is {}",
-                    address,
-                    user_address
-                );
-                tracing::error!("invalid address");
-                return AuthChainValidation::InvalidAddress;
-            }
-        }
-        Err(error) => {
-            tracing::error!("failed to verify signature: {}", error);
-            return AuthChainValidation::InvalidSignature;
-        }
-    }
-
-    AuthChainValidation::Ok
 }

@@ -6,7 +6,7 @@ use actix_web::{
 use s3::Bucket;
 
 use crate::{
-    api::{auth::AuthUserAddress, ResponseError},
+    api::{auth::AuthUser, ResponseError},
     database::Database,
 };
 
@@ -26,13 +26,13 @@ use crate::{
 #[tracing::instrument]
 #[delete("/images/{image_id}")]
 pub async fn delete_image(
-    user_address: AuthUserAddress,
+    user_address: AuthUser,
     bucket: Data<Bucket>,
     database: Data<Database>,
     image_id: Path<String>,
 ) -> impl Responder {
-    let AuthUserAddress {
-        user_address: request_user_address,
+    let AuthUser {
+        address: request_user_address,
     } = user_address;
 
     let image = match database.get_image(&image_id).await {

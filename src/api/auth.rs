@@ -7,11 +7,11 @@ use serde::Deserialize;
 use std::{collections::HashMap, future::Future, pin::Pin};
 
 #[derive(Deserialize, Debug, Default, Clone)]
-pub struct AuthUserAddress {
-    pub user_address: String,
+pub struct AuthUser {
+    pub address: String,
 }
 
-impl FromRequest for AuthUserAddress {
+impl FromRequest for AuthUser {
     type Error = Error;
     type Future = Pin<Box<dyn Future<Output = Result<Self, Self::Error>>>>;
 
@@ -21,7 +21,9 @@ impl FromRequest for AuthUserAddress {
             if let Ok(user_address) =
                 verification(request.headers(), request.method().as_str(), request.path()).await
             {
-                Ok(AuthUserAddress { user_address })
+                Ok(AuthUser {
+                    address: user_address,
+                })
             } else {
                 Err(ErrorUnauthorized("Unathorized"))
             }
