@@ -71,6 +71,7 @@ fn default_limit() -> u64 {
 }
 
 #[derive(Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct GetImagesResponse {
     pub images: Vec<Image>,
     pub current_images: u64,
