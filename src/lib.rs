@@ -12,7 +12,6 @@ pub struct Settings {
     pub port: u16,
     pub api_url: String,
     pub bucket_url: String,
-    pub authentication: bool,
     pub max_images_per_user: u64,
 }
 

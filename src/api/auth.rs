@@ -18,15 +18,10 @@ impl FromRequest for AuthUser {
     fn from_request(request: &HttpRequest, _: &mut Payload) -> Self::Future {
         let request = request.clone();
         Box::pin(async move {
-            if let Ok(user_address) =
-                verification(request.headers(), request.method().as_str(), request.path()).await
-            {
-                Ok(AuthUser {
-                    address: user_address,
-                })
-            } else {
-                Err(ErrorUnauthorized("Unathorized"))
-            }
+            verification(request.headers(), request.method().as_str(), request.path())
+                .await
+                .map(|address| AuthUser { address })
+                .map_err(|_| ErrorUnauthorized("Unathorized"))
         })
     }
 }
