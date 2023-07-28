@@ -31,8 +31,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
     let settings = Data::new(context.settings);
     let bucket = Data::new(context.bucket);
     let database = Data::new(context.database);
-    let metrics_token =
-        std::env::var("WKC_METRICS_BEARER_TOKEN".to_string()).unwrap_or("".to_string());
+    let metrics_token = std::env::var("WKC_METRICS_BEARER_TOKEN").unwrap_or("".to_string());
 
     let server = HttpServer::new(move || {
         let logger = TracingLogger::default();
