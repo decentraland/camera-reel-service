@@ -16,6 +16,7 @@ pub mod auth;
 pub mod delete;
 mod docs;
 pub mod get;
+pub mod middlewares;
 pub mod upload;
 
 pub fn services(config: &mut ServiceConfig) {

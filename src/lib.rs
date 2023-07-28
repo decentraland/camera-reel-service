@@ -4,6 +4,8 @@ use s3::Bucket;
 use tracing_actix_web::TracingLogger;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
 
+use crate::api::middlewares;
+
 pub mod api;
 pub mod database;
 
@@ -29,6 +31,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
     let settings = Data::new(context.settings);
     let bucket = Data::new(context.bucket);
     let database = Data::new(context.database);
+    let metrics_token = std::env::var("WKC_METRICS_BEARER_TOKEN").unwrap_or("".to_string());
 
     let server = HttpServer::new(move || {
         let logger = TracingLogger::default();
@@ -39,6 +42,8 @@ pub async fn run(context: Context) -> std::io::Result<()> {
             .service(live)
             .configure(api::services)
             .wrap(logger)
+            .wrap(middlewares::metrics())
+            .wrap(middlewares::metrics_token(&metrics_token))
     })
     .bind(("0.0.0.0", port))?;
 
