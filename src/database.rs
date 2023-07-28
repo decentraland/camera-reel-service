@@ -72,6 +72,7 @@ impl Database {
             .bind(parse_uuid(id)?)
             .fetch_one(&self.pool)
             .await?;
+
         Ok(image)
     }
 
@@ -106,6 +107,7 @@ impl Database {
             .bind(parse_uuid(id)?)
             .execute(&self.pool)
             .await?;
+
         Ok(())
     }
 

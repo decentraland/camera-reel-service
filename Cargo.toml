@@ -2,6 +2,7 @@
 name = "camera-reel-service"
 version = "0.1.0"
 edition = "2021"
+default-run = "camera-reel-service"
 
 [dependencies]
 # actix
@@ -10,6 +11,7 @@ actix-multipart = "0.6"
 actix-multipart-derive = "0.6"
 actix-web-lab = "0.19"
 actix-cors = "0.6"
+actix-web-prom = "0.7"
 
 # database
 sqlx = { version = "0.7", features = [
