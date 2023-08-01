@@ -31,6 +31,7 @@ fn validate_token(
 
         match token {
             Some(token) if token != &bearer_token => {
+                tracing::error!("invalid bearer token for /metrics");
                 return Err(ErrorUnauthorized("Invalid token"));
             }
             None => {
