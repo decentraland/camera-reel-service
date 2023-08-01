@@ -10,7 +10,7 @@ use actix_web_prom::{PrometheusMetrics, PrometheusMetricsBuilder};
 use std::collections::HashMap;
 
 pub fn metrics() -> PrometheusMetrics {
-    PrometheusMetricsBuilder::new("dcl_camera_reel_serivice")
+    PrometheusMetricsBuilder::new("dcl_camera_reel_service")
         .endpoint("/metrics")
         .build()
         .unwrap()
