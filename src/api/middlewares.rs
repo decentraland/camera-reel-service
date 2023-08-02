@@ -17,21 +17,38 @@ pub fn metrics() -> PrometheusMetrics {
 fn validate_token(bearer_token: String, request: &ServiceRequest) -> Result<(), Error> {
     let path = request.path();
     if path == "/metrics" {
-        let token = request.headers().get("authorization");
+        let token = request
+            .headers()
+            .get("Authorization")
+            .map(|token| token.to_str());
         if bearer_token.is_empty() {
             tracing::error!("missing wkc_metrics_bearer_token in configuration");
             return Err(ErrorInternalServerError(""));
         }
 
         match token {
-            Some(token) if token != &bearer_token => {
-                tracing::error!("invalid bearer token for /metrics");
-                return Err(ErrorUnauthorized("Invalid token"));
+            Some(Ok(token)) => {
+                if token.len() > 7 {
+                    let mut parts = token.splitn(2, ' ');
+                    match parts.next() {
+                        Some(scheme) if scheme == "Bearer" => {}
+                        _ => return Err(ErrorUnauthorized("Wrong schema")),
+                    }
+                    if let Some(token) = parts.next() {
+                        if token != bearer_token {
+                            return Err(ErrorUnauthorized("Invalid token"));
+                        }
+                    } else {
+                        return Err(ErrorUnauthorized("Missing token"));
+                    }
+                } else {
+                    tracing::error!("invalid bearer token for /metrics");
+                    return Err(ErrorUnauthorized("Missing token"));
+                }
             }
-            None => {
+            _ => {
                 return Err(ErrorUnauthorized("Token not present"));
             }
-            _ => {}
         }
     }
 
