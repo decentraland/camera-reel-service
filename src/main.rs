@@ -23,7 +23,7 @@ pub struct Arguments {
     #[clap(long, env, default_value_t = String::from("camera-reel"))]
     s3_bucket_name: String,
 
-    #[clap(long, env, default_value_t = 1000)]
+    #[clap(long, env, default_value_t = 500)]
     max_images_per_user: u64,
 }
 

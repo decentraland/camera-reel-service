@@ -95,7 +95,21 @@ impl From<DBImage> for Image {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum ForbiddenReason {
+    MaxLimitReached,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ForbiddenError {
+    reason: ForbiddenReason,
+    message: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct ResponseError {
     message: String,
 }
@@ -103,6 +117,15 @@ pub struct ResponseError {
 impl ResponseError {
     pub fn new(message: &str) -> Self {
         Self {
+            message: message.to_string(),
+        }
+    }
+}
+
+impl ForbiddenError {
+    pub fn new(message: &str) -> Self {
+        Self {
+            reason: ForbiddenReason::MaxLimitReached,
             message: message.to_string(),
         }
     }

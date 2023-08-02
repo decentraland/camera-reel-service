@@ -11,7 +11,7 @@ use utoipa::ToSchema;
 
 use crate::{
     api::Image,
-    api::{auth::AuthUser, Metadata, ResponseError},
+    api::{auth::AuthUser, ForbiddenError, Metadata, ResponseError},
     database::Database,
     Settings,
 };
@@ -38,8 +38,9 @@ pub struct UploadResponse {
     request_body(content = Upload, description = "Image file and metadata in JSON format.", content_type = "multipart/form-data"),
     responses(
         (status = 200, description = "Uploaded image with its metadata", body = Image),
-        (status = 400, description = "Bad Request"),
-        (status = 500, description = "Internal Server Error"),
+        (status = 400, description = "Bad Request", body = ResponseError),
+        (status = 403, description = "Forbidden", body = ForbiddenError),
+        (status = 500, description = "Internal Server Error", body = ResponseError),
     )
 )]
 #[post("/images")]
@@ -50,6 +51,18 @@ pub async fn upload_image(
     settings: Data<Settings>,
     upload: MultipartForm<Upload>,
 ) -> impl Responder {
+    let images_count = database
+        .get_user_images_count(&auth_user.address)
+        .await
+        .unwrap_or(0);
+    if images_count >= settings.max_images_per_user {
+        let message = format!(
+            "you have reached the limit of {} max images",
+            settings.max_images_per_user
+        );
+
+        return HttpResponse::Forbidden().json(ForbiddenError::new(&message));
+    }
     let (image_bytes, metadata_bytes) = (&upload.image.data, &upload.metadata.data);
 
     let metadata: Metadata = match serde_json::from_slice(metadata_bytes) {
@@ -112,14 +125,17 @@ pub async fn upload_image(
     let image_name = format!("{image_id}-{image_file_name}");
     let thumbnail_name = format!("{image_id}-thumbnail-{image_file_name}");
 
-    if let Err(error) = bucket.put_object(image_name.clone(), image_bytes).await {
+    if let Err(error) = bucket
+        .put_object_with_content_type(image_name.clone(), image_bytes, content_type.as_str())
+        .await
+    {
         tracing::error!("failed to upload image: {}", error);
         return HttpResponse::InternalServerError()
             .json(ResponseError::new("failed to upload image"));
     }
 
     if let Err(error) = bucket
-        .put_object(thumbnail_name.clone(), thumbnail.get_ref())
+        .put_object_with_content_type(thumbnail_name.clone(), thumbnail.get_ref(), content_type.as_str())
         .await
     {
         tracing::error!("failed to upload thumbnail image: {}", error);

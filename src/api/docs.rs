@@ -7,9 +7,24 @@ use utoipa_swagger_ui::SwaggerUi;
 
 #[derive(OpenApi)]
 #[openapi(
-    info(title = "Camera Reel Service", description = "Camera Reel API"),
+    info(
+        title = "Camera Reel Service", 
+        description = "Camera Reel API"
+    ),
     paths(delete_image, get_image, get_metadata, get_user_images, upload_image),
-    components(schemas(Image, Metadata, Scene, Location, User, Upload)),
+    components(
+        schemas(
+            Image, 
+            Metadata, 
+            Scene, 
+            Location, 
+            User, 
+            Upload, 
+            ResponseError, 
+            ForbiddenError, 
+            ForbiddenReason
+        )
+    ),
     tags((name = "images", description = "Images management endpoints.")),
 )]
 pub struct ApiDoc;
