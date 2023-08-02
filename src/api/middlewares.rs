@@ -16,14 +16,10 @@ pub fn metrics() -> PrometheusMetrics {
         .unwrap()
 }
 
-fn validate_token(
-    bearer_token: String,
-    query: web::Query<HashMap<String, String>>,
-    request: &ServiceRequest,
-) -> Result<(), Error> {
+fn validate_token(bearer_token: String, request: &ServiceRequest) -> Result<(), Error> {
     let path = request.path();
     if path == "/metrics" {
-        let token = query.get("bearer_token");
+        let token = request.headers().get("authorization");
         if bearer_token.is_empty() {
             tracing::error!("missing wkc_metrics_bearer_token in configuration");
             return Err(ErrorInternalServerError(""));
