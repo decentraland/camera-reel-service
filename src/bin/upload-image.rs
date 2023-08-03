@@ -57,8 +57,8 @@ async fn main() {
         .part("image", image_file_part)
         .part("metadata", metadata_part);
 
-    let address = "https://camera-reel-service.decentraland.zone";
-    // let address = "http://127.0.0.1:3000";
+    // let address = "https://camera-reel-service.decentraland.zone";
+    let address = "http://127.0.0.1:3000";
 
     let path = "/api/images";
     let headers = get_signed_headers(identity, "post", path, "");
@@ -74,7 +74,23 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("image upload response: {}", response.text().await.unwrap())
+    println!("image upload response: {}", response.text().await.unwrap());
+
+    let identity = create_test_identity();
+    let path = "/api/users/0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5/images";
+    let headers = get_signed_headers(identity, "get", path, "");
+    let response = reqwest::Client::new()
+        .get(&format!("{address}{path}"))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    println!("get images response: {}", response.text().await.unwrap());
 }
 
 fn get_signed_headers(

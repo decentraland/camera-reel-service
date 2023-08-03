@@ -27,8 +27,9 @@ pub struct Upload {
 
 #[derive(Deserialize, Serialize)]
 pub struct UploadResponse {
-    #[serde(flatten)]
     pub image: Image,
+    pub current_images: u64,
+    pub max_images: u64,
 }
 
 #[tracing::instrument(skip(upload))]
@@ -135,7 +136,11 @@ pub async fn upload_image(
     }
 
     if let Err(error) = bucket
-        .put_object_with_content_type(thumbnail_name.clone(), thumbnail.get_ref(), content_type.as_str())
+        .put_object_with_content_type(
+            thumbnail_name.clone(),
+            thumbnail.get_ref(),
+            content_type.as_str(),
+        )
         .await
     {
         tracing::error!("failed to upload thumbnail image: {}", error);

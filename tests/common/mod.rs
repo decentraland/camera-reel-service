@@ -6,7 +6,7 @@ use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::{
     api::{self, upload::UploadResponse, Metadata},
     database::{Database, DatabaseOptions},
-    live, Settings,
+    live, Environment, Settings,
 };
 use dcl_crypto::Identity;
 use rand::{distributions::Alphanumeric, Rng};
@@ -88,6 +88,7 @@ fn create_settings(bucket_name: &str) -> Settings {
         bucket_url: format!("http://127.0.0.1:9000/{bucket_name}"),
         api_url: "http://localhost:5000".to_owned(),
         max_images_per_user: 1000,
+        env: Environment::Dev,
     }
 }
 
