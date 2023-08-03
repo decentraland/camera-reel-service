@@ -49,7 +49,7 @@ async fn test_get_multiple_images() {
         .await
         .unwrap();
 
-    assert_eq!(images_response.current_images, 5);
+    assert_eq!(images_response.user_data.current_images, 5);
 }
 
 #[actix_web::test]

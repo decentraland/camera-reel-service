@@ -11,7 +11,14 @@ use utoipa_swagger_ui::SwaggerUi;
         title = "Camera Reel Service", 
         description = "Camera Reel API"
     ),
-    paths(delete_image, get_image, get_metadata, get_user_images, upload_image),
+    paths(
+        delete_image,
+        get_image, 
+        get_metadata, 
+        get_user_data, 
+        get_user_images, 
+        upload_image
+    ),
     components(
         schemas(
             Image, 
@@ -20,6 +27,7 @@ use utoipa_swagger_ui::SwaggerUi;
             Location, 
             User, 
             Upload, 
+            UploadResponse,
             GetImagesResponse,
             UserDataResponse,
             ResponseError, 

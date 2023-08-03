@@ -11,7 +11,7 @@ use utoipa::ToSchema;
 
 use crate::{
     api::Image,
-    api::{auth::AuthUser, ForbiddenError, Metadata, ResponseError},
+    api::{auth::AuthUser, get::UserDataResponse, ForbiddenError, Metadata, ResponseError},
     database::Database,
     Settings,
 };
@@ -24,11 +24,12 @@ pub struct Upload {
     #[schema(value_type = String, format = Binary)]
     metadata: Bytes,
 }
-
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
 pub struct UploadResponse {
-    #[serde(flatten)]
     pub image: Image,
+    #[serde(flatten)]
+    pub user_data: UserDataResponse,
 }
 
 #[tracing::instrument(skip(upload))]
@@ -37,7 +38,7 @@ pub struct UploadResponse {
     context_path = "/api", 
     request_body(content = Upload, description = "Image file and metadata in JSON format.", content_type = "multipart/form-data"),
     responses(
-        (status = 200, description = "Uploaded image with its metadata", body = Image),
+        (status = 200, description = "Uploaded image with its metadata", body = UploadResponse),
         (status = 400, description = "Bad Request", body = ResponseError),
         (status = 403, description = "Forbidden", body = ForbiddenError),
         (status = 500, description = "Internal Server Error", body = ResponseError),
@@ -162,6 +163,10 @@ pub async fn upload_image(
             .json(ResponseError::new("failed to store image metadata"));
     };
 
-    let response = UploadResponse { image };
+    let user_data = UserDataResponse {
+        current_images: images_count + 1,
+        max_images: settings.max_images_per_user,
+    };
+    let response = UploadResponse { image, user_data };
     HttpResponse::Ok().json(response)
 }
