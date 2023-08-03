@@ -1,4 +1,4 @@
-use camera_reel_service::{database::Database, run, Context, Settings};
+use camera_reel_service::{database::Database, run, Context, Environment, Settings};
 use clap::Parser;
 use s3::{creds::Credentials, Bucket, Region};
 
@@ -68,6 +68,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         bucket_url: s3_url.to_string(),
         api_url: args.api_url,
         max_images_per_user: args.max_images_per_user,
+        env: read_env(),
     };
 
     let context = Context {
@@ -80,4 +81,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         tracing::debug!("app finished with error: {:?}", e);
         e
     })?)
+}
+
+fn read_env() -> Environment {
+    match std::env::var("ENV") {
+        Ok(env) if env == "prd" => Environment::Prod,
+        _ => Environment::Dev,
+    }
 }

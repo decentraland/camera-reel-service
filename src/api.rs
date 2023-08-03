@@ -40,7 +40,7 @@ pub fn services(config: &mut ServiceConfig) {
     );
 }
 
-#[derive(Deserialize, Serialize, Debug, ToSchema)]
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Image {
     pub id: String,

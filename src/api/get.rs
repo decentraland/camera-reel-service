@@ -1,16 +1,16 @@
 use actix_web::{
     get,
     web::{Data, Path, Redirect},
-    HttpResponse, Responder,
+    FromRequest, HttpRequest, HttpResponse, Responder,
 };
 use actix_web_lab::extract::Query;
 use serde::{Deserialize, Serialize};
-use utoipa::IntoParams;
+use utoipa::{IntoParams, ToSchema};
 
 use crate::{
-    api::{Image, ResponseError},
+    api::{auth::AuthUser, Image, ResponseError},
     database::Database,
-    Settings,
+    Environment, Settings,
 };
 
 #[tracing::instrument]
@@ -70,34 +70,13 @@ fn default_limit() -> u64 {
     20
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetImagesResponse {
     pub images: Vec<Image>,
     pub current_images: u64,
     pub max_images: u64,
 }
-
-// Commenting this in favour of unauthorized endpoint for testing purposes
-// Re-enable this one when is ready
-//
-// #[tracing::instrument]
-// #[utoipa::path(get, context_path = "/api")]
-// #[get("/users/me/images")]
-// async fn get_user_images(
-//     user_address: AuthUserAddress,
-//     query_params: Query<GetImagesQuery>,
-//     database: Data<Database>,
-// ) -> impl Responder {
-//     let AuthUserAddress { user_address } = user_address;
-//     let GetImagesQuery { offset, limit } = query_params.into_inner();
-//
-//     let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
-//         return HttpResponse::NotFound().body("user not found");
-//     };
-//     let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
-//     HttpResponse::Ok().json(images)
-// }
 
 #[tracing::instrument]
 #[utoipa::path(
@@ -115,10 +94,21 @@ pub struct GetImagesResponse {
 async fn get_user_images(
     user_address: Path<String>,
     query_params: Query<GetImagesQuery>,
+    request: HttpRequest,
     settings: Data<Settings>,
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
+
+    if matches!(settings.env, Environment::Prod) {
+        match AuthUser::extract(&request).await {
+            Ok(AuthUser { address }) if address == user_address => {}
+            _ => {
+                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+            }
+        }
+    }
+
     let GetImagesQuery { offset, limit } = query_params.into_inner();
 
     let Ok(images_count) = database.get_user_images_count(&user_address).await else {

@@ -20,6 +20,7 @@ use utoipa_swagger_ui::SwaggerUi;
             Location, 
             User, 
             Upload, 
+            GetImagesResponse,
             ResponseError, 
             ForbiddenError, 
             ForbiddenReason

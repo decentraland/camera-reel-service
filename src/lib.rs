@@ -10,11 +10,18 @@ pub mod api;
 pub mod database;
 
 #[derive(Debug)]
+pub enum Environment {
+    Dev,
+    Prod,
+}
+
+#[derive(Debug)]
 pub struct Settings {
     pub port: u16,
     pub api_url: String,
     pub bucket_url: String,
     pub max_images_per_user: u64,
+    pub env: Environment,
 }
 
 pub struct Context {
