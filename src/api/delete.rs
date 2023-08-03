@@ -8,13 +8,16 @@ use s3::Bucket;
 use crate::{
     api::{auth::AuthUser, ResponseError},
     database::Database,
+    Settings,
 };
+
+use super::get::UserDataResponse;
 
 #[utoipa::path(
     tag = "images",
     context_path = "/api",
     responses(
-        (status = 200, description = "Image deleted"),
+        (status = 200, description = "Image deleted", body = UserDataResponse),
         (status = NOT_FOUND, description = "Image was not found"),
         (status = FORBIDDEN, description = "Forbidden"),
         (status = INTERNAL_SERVER_ERROR, description = "Failed to delete image"),
@@ -27,9 +30,10 @@ use crate::{
 #[delete("/images/{image_id}")]
 pub async fn delete_image(
     user_address: AuthUser,
+    image_id: Path<String>,
     bucket: Data<Bucket>,
     database: Data<Database>,
-    image_id: Path<String>,
+    settings: Data<Settings>,
 ) -> impl Responder {
     let AuthUser {
         address: request_user_address,
@@ -80,5 +84,13 @@ pub async fn delete_image(
         }
     }
 
-    HttpResponse::Ok().finish()
+    let current_images = database
+        .get_user_images_count(&image.user_address)
+        .await
+        .unwrap_or(0);
+
+    HttpResponse::Ok().json(UserDataResponse {
+        max_images: settings.max_images_per_user,
+        current_images,
+    })
 }

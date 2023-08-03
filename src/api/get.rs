@@ -72,10 +72,57 @@ fn default_limit() -> u64 {
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct GetImagesResponse {
-    pub images: Vec<Image>,
+pub struct UserDataResponse {
     pub current_images: u64,
     pub max_images: u64,
+}
+
+#[tracing::instrument]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    responses(
+        (status = 200, description = "Get user data", body = UserDataResponse),
+        (status = 404, description = "Not found")
+    )
+)]
+#[get("/users/{user_address}")]
+async fn get_user_data(
+    user_address: Path<String>,
+    query_params: Query<GetImagesQuery>,
+    request: HttpRequest,
+    settings: Data<Settings>,
+    database: Data<Database>,
+) -> impl Responder {
+    let user_address = user_address.into_inner();
+
+    if matches!(settings.env, Environment::Prod) {
+        match AuthUser::extract(&request).await {
+            Ok(AuthUser { address }) if address == user_address => {}
+            _ => {
+                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+            }
+        }
+    }
+
+    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+        return HttpResponse::NotFound().json(ResponseError::new("user not found"));
+    };
+
+    let user_data = UserDataResponse {
+        max_images: settings.max_images_per_user,
+        current_images: images_count,
+    };
+
+    HttpResponse::Ok().json(user_data)
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetImagesResponse {
+    pub images: Vec<Image>,
+    #[serde(flatten)]
+    pub user_data: UserDataResponse,
 }
 
 #[tracing::instrument]
@@ -86,7 +133,7 @@ pub struct GetImagesResponse {
         GetImagesQuery
     ),
     responses(
-        (status = 200, description = "List images metadatas for a given user", body = GetImagesResponse),
+        (status = 200, description = "List images for a given user", body = GetImagesResponse),
         (status = 404, description = "Not found")
     )
 )]
@@ -120,9 +167,9 @@ async fn get_user_images(
     };
 
     let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
-    HttpResponse::Ok().json(GetImagesResponse {
-        images,
+    let user_data = UserDataResponse {
         current_images: images_count,
         max_images: settings.max_images_per_user,
-    })
+    };
+    HttpResponse::Ok().json(GetImagesResponse { images, user_data })
 }

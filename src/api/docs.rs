@@ -21,6 +21,7 @@ use utoipa_swagger_ui::SwaggerUi;
             User, 
             Upload, 
             GetImagesResponse,
+            UserDataResponse,
             ResponseError, 
             ForbiddenError, 
             ForbiddenReason
