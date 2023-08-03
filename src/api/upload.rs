@@ -27,9 +27,8 @@ pub struct Upload {
 
 #[derive(Deserialize, Serialize)]
 pub struct UploadResponse {
+    #[serde(flatten)]
     pub image: Image,
-    pub current_images: u64,
-    pub max_images: u64,
 }
 
 #[tracing::instrument(skip(upload))]
