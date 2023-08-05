@@ -8,7 +8,7 @@ use crate::database::DBImage;
 use self::{
     delete::delete_image,
     docs::generate_docs,
-    get::{get_image, get_metadata, get_user_images},
+    get::{get_image, get_metadata, get_user_data, get_user_images},
     upload::upload_image,
 };
 
@@ -36,6 +36,7 @@ pub fn services(config: &mut ServiceConfig) {
             .service(get_image)
             .service(get_metadata)
             .service(get_user_images)
+            .service(get_user_data)
             .wrap(cors),
     );
 }
