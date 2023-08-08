@@ -27,23 +27,15 @@ fn validate_token(bearer_token: String, request: &ServiceRequest) -> Result<(), 
         }
 
         match token {
-            Some(Ok(token)) => {
-                if token.len() > 7 {
-                    let mut parts = token.splitn(2, ' ');
-                    match parts.next() {
-                        Some(scheme) if scheme == "Bearer" => {}
-                        _ => return Err(ErrorUnauthorized("Wrong schema")),
-                    }
-                    if let Some(token) = parts.next() {
-                        if token != bearer_token {
-                            return Err(ErrorUnauthorized("Invalid token"));
-                        }
-                    } else {
-                        return Err(ErrorUnauthorized("Missing token"));
-                    }
-                } else {
-                    tracing::error!("invalid bearer token for /metrics");
-                    return Err(ErrorUnauthorized("Missing token"));
+            Some(Ok(token)) if token.len() > 7 => {
+                let mut parts = token.splitn(2, ' ');
+                match parts.next() {
+                    Some(scheme) if scheme == "Bearer" => {}
+                    _ => return Err(ErrorUnauthorized("Wrong schema")),
+                }
+                match parts.next() {
+                    Some(token) if token == bearer_token => {}
+                    _ => return Err(ErrorUnauthorized("Invalid token")),
                 }
             }
             _ => {

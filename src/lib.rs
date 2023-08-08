@@ -1,8 +1,11 @@
 use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
 use database::Database;
 use s3::Bucket;
+use tracing::subscriber::set_global_default;
 use tracing_actix_web::TracingLogger;
-use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
+use tracing_log::LogTracer;
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_tree::HierarchicalLayer;
 
 use crate::api::middlewares;
 
@@ -60,12 +63,15 @@ pub async fn run(context: Context) -> std::io::Result<()> {
 }
 
 fn initialize_tracing() {
-    let directives =
-        std::env::var("RUST_LOG").unwrap_or_else(|_| "camera-reel-service=debug".into());
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(directives))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
+    // Redirect all `log`'s events to our subscriber
+    LogTracer::init().expect("Failed to set logger");
+
+    let env_filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("camera-reel-service=debug"));
+    let formatting_layer = HierarchicalLayer::new(2);
+    let subscriber = Registry::default().with(env_filter).with(formatting_layer);
+
+    set_global_default(subscriber).expect("Failed to set subscriber");
 }
 
 #[tracing::instrument]

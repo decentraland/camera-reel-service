@@ -64,6 +64,7 @@ pub async fn upload_image(
 
         return HttpResponse::Forbidden().json(ForbiddenError::new(&message));
     }
+
     let (image_bytes, metadata_bytes) = (&upload.image.data, &upload.metadata.data);
 
     let metadata: Metadata = match serde_json::from_slice(metadata_bytes) {

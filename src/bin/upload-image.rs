@@ -1,7 +1,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_web_lab::__reexports::serde_json;
-use camera_reel_service::api::Metadata;
+use camera_reel_service::api::{upload::UploadResponse, Metadata};
 use dcl_crypto::Identity;
 
 pub fn create_test_identity() -> dcl_crypto::Identity {
@@ -57,8 +57,8 @@ async fn main() {
         .part("image", image_file_part)
         .part("metadata", metadata_part);
 
-    // let address = "https://camera-reel-service.decentraland.zone";
-    let address = "http://127.0.0.1:3000";
+    let address = "https://camera-reel-service.decentraland.zone";
+    // let address = "http://127.0.0.1:3000";
 
     let path = "/api/images";
     let headers = get_signed_headers(identity, "post", path, "");
@@ -74,7 +74,9 @@ async fn main() {
         .await
         .unwrap();
 
-    println!("image upload response: {}", response.text().await.unwrap());
+    let response: UploadResponse = response.json().await.unwrap();
+    println!("image upload response: {:?}", response);
+    let image_id = response.image.id;
 
     let identity = create_test_identity();
     let path = "/api/users/0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5/images";
@@ -91,6 +93,22 @@ async fn main() {
         .unwrap();
 
     println!("get images response: {}", response.text().await.unwrap());
+
+    let identity = create_test_identity();
+    let path = format!("/api/images/{image_id}");
+    let headers = get_signed_headers(identity, "delete", &path, "");
+    let response = reqwest::Client::new()
+        .delete(&format!("{address}{path}"))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    println!("delete image response: {}", response.text().await.unwrap());
 }
 
 fn get_signed_headers(

@@ -1,4 +1,4 @@
-use camera_reel_service::api::get::GetImagesResponse;
+use camera_reel_service::api::get::{GetImagesResponse, UserDataResponse};
 use common::upload_test_image;
 
 use crate::common::{create_test_identity, create_test_server, get_signed_headers};
@@ -82,6 +82,9 @@ async fn test_delete_image() {
         .unwrap();
 
     assert!(response.status().is_success());
+    let response = response.json::<UserDataResponse>().await;
+    println!("{:?}", response);
+    assert!(response.is_ok());
 
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
