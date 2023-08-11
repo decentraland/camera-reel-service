@@ -34,7 +34,7 @@ async fn main() {
     let identity = create_test_identity();
 
     // prepare image
-    let image_bytes = include_bytes!("../../tests/resources/fall-autumn-red-season.jpg").to_vec();
+    let image_bytes = include_bytes!("../tests/resources/fall-autumn-red-season.jpg").to_vec();
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
         .file_name("fall-autumn-red-season.jpg")
         .mime_str("image/jpeg")

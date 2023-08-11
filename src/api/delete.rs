@@ -13,6 +13,7 @@ use crate::{
 
 use super::get::UserDataResponse;
 
+#[tracing::instrument(skip(bucket, database))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api",
@@ -26,7 +27,6 @@ use super::get::UserDataResponse;
         ("image_id" = u64, Path, description = "Image database id to delete"),
     )
 )]
-#[tracing::instrument]
 #[delete("/images/{image_id}")]
 pub async fn delete_image(
     user_address: AuthUser,

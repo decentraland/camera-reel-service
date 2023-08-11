@@ -13,7 +13,7 @@ use crate::{
     Environment, Settings,
 };
 
-#[tracing::instrument]
+#[tracing::instrument(skip(settings))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
@@ -26,7 +26,7 @@ async fn get_image(settings: Data<Settings>, image_id: Path<String>) -> impl Res
     Redirect::to(format!("{}/{}", settings.bucket_url, image_id))
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(database))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
@@ -77,7 +77,7 @@ pub struct UserDataResponse {
     pub max_images: u64,
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(database, settings))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
@@ -125,7 +125,7 @@ pub struct GetImagesResponse {
     pub user_data: UserDataResponse,
 }
 
-#[tracing::instrument]
+#[tracing::instrument(skip(database, settings))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 

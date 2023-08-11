@@ -32,7 +32,7 @@ pub struct UploadResponse {
     pub user_data: UserDataResponse,
 }
 
-#[tracing::instrument(skip(upload))]
+#[tracing::instrument(skip(upload, bucket, database, settings))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
