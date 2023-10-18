@@ -52,8 +52,8 @@ pub async fn run(context: Context) -> std::io::Result<()> {
             .service(live)
             .configure(api::services)
             .wrap(logger)
-            .wrap(middlewares::metrics())
-            .wrap(middlewares::metrics_token(&metrics_token))
+            // .wrap(middlewares::metrics())
+            // .wrap(middlewares::metrics_token(&metrics_token))
     })
     .bind(("0.0.0.0", port))?;
 
