@@ -11,7 +11,6 @@ actix-multipart = "0.6"
 actix-multipart-derive = "0.6"
 actix-web-lab = "0.19"
 actix-cors = "0.6"
-actix-web-prom = "0.7"
 
 # database
 sqlx = { version = "0.7", features = [
@@ -38,6 +37,7 @@ tracing-actix-web = "0.7"
 # decentraland
 dcl-crypto-middleware-rs = { version = "0.2.1", features = ["signed_fetch"] }
 dcl-crypto = "0.2.1"
+dcl-http-prom-metrics = "0.1.0"
 
 # metadata
 serde = { version = "1.0", features = ["derive"] }

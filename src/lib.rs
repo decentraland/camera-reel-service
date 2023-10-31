@@ -1,5 +1,6 @@
 use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
 use database::Database;
+use dcl_http_prom_metrics::HttpMetricsCollectorBuilder;
 use s3::Bucket;
 use tracing::subscriber::set_global_default;
 use tracing_actix_web::TracingLogger;
@@ -41,6 +42,8 @@ pub async fn run(context: Context) -> std::io::Result<()> {
     let settings = Data::new(context.settings);
     let bucket = Data::new(context.bucket);
     let database = Data::new(context.database);
+
+    let http_metrics_collector = Data::new(HttpMetricsCollectorBuilder::default().build());
     let metrics_token = std::env::var("WKC_METRICS_BEARER_TOKEN").unwrap_or("".to_string());
 
     let server = HttpServer::new(move || {
@@ -49,11 +52,12 @@ pub async fn run(context: Context) -> std::io::Result<()> {
             .app_data(settings.clone())
             .app_data(bucket.clone())
             .app_data(database.clone())
+            .app_data(http_metrics_collector.clone())
             .service(live)
             .configure(api::services)
+            .wrap(dcl_http_prom_metrics::metrics())
+            .wrap(middlewares::metrics_token(&metrics_token))
             .wrap(logger)
-            // .wrap(middlewares::metrics())
-            // .wrap(middlewares::metrics_token(&metrics_token))
     })
     .bind(("0.0.0.0", port))?;
 
