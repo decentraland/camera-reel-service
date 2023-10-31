@@ -5,14 +5,6 @@ use actix_web::{
     Error,
 };
 use actix_web_lab::middleware::{from_fn, Next};
-use actix_web_prom::{PrometheusMetrics, PrometheusMetricsBuilder};
-
-pub fn metrics() -> PrometheusMetrics {
-    PrometheusMetricsBuilder::new("dcl_camera_reel_service")
-        .endpoint("/metrics")
-        .build()
-        .unwrap()
-}
 
 fn validate_token(bearer_token: String, request: &ServiceRequest) -> Result<(), Error> {
     let path = request.path();

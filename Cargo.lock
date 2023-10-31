@@ -35,6 +35,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "actix-files"
+version = "0.6.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d832782fac6ca7369a70c9ee9a20554623c5e51c76e190ad151780ebea1cf689"
+dependencies = [
+ "actix-http",
+ "actix-service",
+ "actix-utils",
+ "actix-web",
+ "askama_escape",
+ "bitflags 1.3.2",
+ "bytes",
+ "derive_more",
+ "futures-core",
+ "http-range",
+ "log",
+ "mime",
+ "mime_guess",
+ "percent-encoding",
+ "pin-project-lite",
+]
+
+[[package]]
 name = "actix-http"
 version = "3.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -304,16 +327,17 @@ dependencies = [
 
 [[package]]
 name = "actix-web-lab"
-version = "0.19.1"
+version = "0.18.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9e9f49571dfcf49ed79c6e7a645e9554ae01925eb55fa6e3b2501ceeed24d7e7"
+checksum = "55b7ac6309cfb46949171c49f7bc81d021310205a39bf0b0d0465e80a4857e3c"
 dependencies = [
+ "actix-files",
  "actix-http",
  "actix-router",
  "actix-service",
  "actix-utils",
  "actix-web",
- "actix-web-lab-derive",
+ "actix-web-lab-derive 0.18.0",
  "ahash 0.8.3",
  "arc-swap",
  "async-trait",
@@ -333,10 +357,59 @@ dependencies = [
  "pin-project-lite",
  "regex",
  "serde",
- "serde_html_form",
+ "serde_cbor_2",
+ "serde_html_form 0.1.1",
  "serde_json",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "actix-web-lab"
+version = "0.19.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9e9f49571dfcf49ed79c6e7a645e9554ae01925eb55fa6e3b2501ceeed24d7e7"
+dependencies = [
+ "actix-http",
+ "actix-router",
+ "actix-service",
+ "actix-utils",
+ "actix-web",
+ "actix-web-lab-derive 0.19.0",
+ "ahash 0.8.3",
+ "arc-swap",
+ "async-trait",
+ "bytes",
+ "bytestring",
+ "csv",
+ "derive_more",
+ "futures-core",
+ "futures-util",
+ "http",
+ "impl-more",
+ "itertools",
+ "local-channel",
+ "mediatype",
+ "mime",
+ "once_cell",
+ "pin-project-lite",
+ "regex",
+ "serde",
+ "serde_html_form 0.2.0",
+ "serde_json",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "actix-web-lab-derive"
+version = "0.18.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e4419acd7924ac473ccd00a6efea324dd382b0b7ae31b8e06cd2c58d4d7afae6"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
 ]
 
 [[package]]
@@ -348,19 +421,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
-]
-
-[[package]]
-name = "actix-web-prom"
-version = "0.7.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f23f332a652836b8f3a6876103c70c9ed436d0e69fa779ab5d7f57b1d5c8d488"
-dependencies = [
- "actix-web",
- "futures-core",
- "pin-project-lite",
- "prometheus",
- "regex",
 ]
 
 [[package]]
@@ -506,6 +566,12 @@ name = "arrayvec"
 version = "0.7.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "96d30a06541fbafbc7f82ed10c06164cfbd2c401138f6addd8404629c4b16711"
+
+[[package]]
+name = "askama_escape"
+version = "0.10.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "619743e34b5ba4e9703bba34deac3427c72507c7159f5fd030aea8cac0cfe341"
 
 [[package]]
 name = "async-trait"
@@ -779,11 +845,11 @@ dependencies = [
  "actix-multipart-derive",
  "actix-test",
  "actix-web",
- "actix-web-lab",
- "actix-web-prom",
+ "actix-web-lab 0.19.1",
  "clap",
  "dcl-crypto",
  "dcl-crypto-middleware-rs",
+ "dcl-http-prom-metrics",
  "image",
  "rand 0.8.5",
  "reqwest",
@@ -1116,6 +1182,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "dcl-http-prom-metrics"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "83271526f6ec17498f8bc85c256913357bc78f8050dd847422d9e90cb9f619af"
+dependencies = [
+ "actix-web",
+ "actix-web-lab 0.18.9",
+ "prometheus",
+]
+
+[[package]]
 name = "der"
 version = "0.7.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1348,7 +1425,7 @@ checksum = "85a7b44a196573e272e0cf0bcf130281c71e9a0c67062954b3323fd364bfdac9"
 dependencies = [
  "bit_field",
  "flume",
- "half",
+ "half 2.2.1",
  "lebe",
  "miniz_oxide",
  "rayon-core",
@@ -1641,6 +1718,12 @@ dependencies = [
 
 [[package]]
 name = "half"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "eabb4a44450da02c90444cf74558da904edde8fb4e9035a9a6a4e15445af0bd7"
+
+[[package]]
+name = "half"
 version = "2.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "02b4af3693f1b705df946e9fe5631932443781d0aabb423b62fcd4d73f6d2fd0"
@@ -1770,6 +1853,12 @@ dependencies = [
  "http",
  "pin-project-lite",
 ]
+
+[[package]]
+name = "http-range"
+version = "0.1.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "21dec9db110f5f872ed9699c3ecf50cf16f423502706ba5c72462e28d3157573"
 
 [[package]]
 name = "httparse"
@@ -2737,8 +2826,15 @@ dependencies = [
  "lazy_static",
  "memchr",
  "parking_lot",
+ "protobuf",
  "thiserror",
 ]
+
+[[package]]
+name = "protobuf"
+version = "2.28.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "106dd99e98437432fed6519dedecfade6a06a73bb7b2a1e019fdd2bee5778d94"
 
 [[package]]
 name = "qoi"
@@ -3280,6 +3376,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde_cbor_2"
+version = "0.12.0-dev"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b46d75f449e01f1eddbe9b00f432d616fbbd899b809c837d0fbc380496a0dd55"
+dependencies = [
+ "half 1.8.2",
+ "serde",
+]
+
+[[package]]
 name = "serde_derive"
 version = "1.0.166"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3288,6 +3394,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.23",
+]
+
+[[package]]
+name = "serde_html_form"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d051fb33111db0e81673ed8c55db741952a19ad81dc584960c8aec836498ba5"
+dependencies = [
+ "form_urlencoded",
+ "indexmap 1.9.3",
+ "itoa",
+ "ryu",
+ "serde",
 ]
 
 [[package]]
