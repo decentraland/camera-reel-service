@@ -1,5 +1,6 @@
 use camera_reel_service::api::get::{GetImagesResponse, UserDataResponse};
 use common::upload_test_image;
+use common::upload_test_failing_image;
 
 use crate::common::{create_test_identity, create_test_server, get_signed_headers};
 
@@ -24,6 +25,15 @@ async fn test_upload_image() {
     let address = server.addr();
 
     upload_test_image("image.png", &address.to_string()).await;
+}
+
+#[actix_web::test]
+async fn test_upload_failing_image() {
+    let server = create_test_server().await;
+    let address = server.addr();
+
+    let response = upload_test_failing_image("any/image.png", &address.to_string()).await;
+    assert!(response.contains("invalid file name"));
 }
 
 #[actix_web::test]

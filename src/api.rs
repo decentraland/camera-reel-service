@@ -121,6 +121,10 @@ impl ResponseError {
             message: message.to_string(),
         }
     }
+
+    pub fn get_message(&self) -> &String {
+        &self.message
+    }
 }
 
 impl ForbiddenError {
