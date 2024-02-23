@@ -124,6 +124,11 @@ pub async fn upload_image(
         .clone()
         .unwrap_or("image.png".to_string());
 
+    // check that the image_file_name variable does not has any / or \ characters
+    if image_file_name.contains('/') || image_file_name.contains('\\') {
+        return HttpResponse::BadRequest().json(ResponseError::new("invalid file name"));
+    }
+
     let image_name = format!("{image_id}-{image_file_name}");
     let thumbnail_name = format!("{image_id}-thumbnail-{image_file_name}");
 
