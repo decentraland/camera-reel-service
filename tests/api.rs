@@ -1,4 +1,9 @@
-use camera_reel_service::api::get::{GetImagesResponse, UserDataResponse};
+use actix_test::TestServer;
+use actix_web_lab::__reexports::serde_json;
+use camera_reel_service::api::{
+    get::{GetImagesResponse, UserDataResponse},
+    Image
+};
 use common::upload_test_image;
 use common::upload_test_failing_image;
 
@@ -24,7 +29,7 @@ async fn test_upload_image() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    upload_test_image("image.png", &address.to_string()).await;
+    upload_test_image("image.png", &address.to_string(), false).await;
 }
 
 #[actix_web::test]
@@ -44,7 +49,7 @@ async fn test_get_multiple_images() {
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
 
     for i in 0..5 {
-        upload_test_image(&format!("image-{i}.png"), &address.to_string()).await;
+        upload_test_image(&format!("image-{i}.png"), &address.to_string(), false).await;
     }
 
     let images_response = reqwest::Client::new()
@@ -67,7 +72,7 @@ async fn test_delete_image() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    let id = upload_test_image("image.png", &address.to_string()).await;
+    let id = upload_test_image("image.png", &address.to_string(), false).await;
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
@@ -103,4 +108,51 @@ async fn test_delete_image() {
         .unwrap();
 
     assert_eq!(response.status(), 404);
+}
+
+#[actix_web::test]
+async fn test_update_image_visibility() {
+    let server: TestServer = create_test_server().await;
+    let address = server.addr();
+
+    let id = upload_test_image("image.png", &address.to_string(), true).await;
+
+    // Initial visibility is public (is_public: true)
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, true);
+
+    // Update visibility to private
+    let identity = create_test_identity();
+    let path = &format!("/api/images/{}/visibility", id);
+    let headers = get_signed_headers(identity, "patch", path, "");
+
+    let response = reqwest::Client::new()
+        .patch(&format!("http://{}{path}", address))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .json(&serde_json::json!({ "is_public": false }))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+
+    // Check if visibility was updated
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .send()
+        .await
+        .unwrap();
+    assert!(response.status().is_success());
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, false);
 }

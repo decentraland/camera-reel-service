@@ -1,6 +1,6 @@
 use std::io::Cursor;
 
-use actix_multipart::form::{bytes::Bytes, MultipartForm};
+use actix_multipart::form::{bytes::Bytes, MultipartForm, text::Text};
 use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
 use image::guess_format;
@@ -23,6 +23,8 @@ pub struct Upload {
     image: Bytes,
     #[schema(value_type = String, format = Binary)]
     metadata: Bytes,
+    #[schema(value_type = bool)]
+    is_public: Option<Text<bool>>,
 }
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -65,7 +67,7 @@ pub async fn upload_image(
         return HttpResponse::Forbidden().json(ForbiddenError::new(&message));
     }
 
-    let (image_bytes, metadata_bytes) = (&upload.image.data, &upload.metadata.data);
+    let (image_bytes, metadata_bytes, is_public) = (&upload.image.data, &upload.metadata.data, upload.is_public.as_ref().map_or(false, |val| val.0));
 
     let metadata: Metadata = match serde_json::from_slice(metadata_bytes) {
         Ok(metadata) => metadata,
@@ -160,6 +162,7 @@ pub async fn upload_image(
         id: image_id.clone(),
         url: format!("{http_url}/api/images/{image_name}"),
         thumbnail_url: format!("{http_url}/api/images/{thumbnail_name}"),
+        is_public,
         metadata: metadata.clone(),
     };
 

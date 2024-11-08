@@ -8,11 +8,9 @@ use actix_web::{
 use serde::Deserialize;
 
 use crate::{
-    api::{auth::AuthUser, Metadata, ResponseError},
+    api::{auth::AuthUser, ResponseError},
     database::Database
 };
-
-use super::{Scene, User};
 
 #[derive(Deserialize)]
 struct UpdateVisibility {
@@ -37,7 +35,9 @@ pub async fn update_image_visibility(
     database: Data<Database>,
     update: Json<UpdateVisibility>,
 ) -> impl Responder {
-    let image_id = id.into_inner();
+    let image_id = image_id.into_inner();
+
+    println!("Updating image visibility: {}, {}", image_id, update.is_public);
 
     let AuthUser {
         address: request_user_address,
@@ -54,10 +54,8 @@ pub async fn update_image_visibility(
     {
         return HttpResponse::Forbidden().json(ResponseError::new("forbidden"));
     }
-
-    image.is_public = update.is_public;
     
-    if let Err(error) = database.update_image_visibility(&image).await {
+    if let Err(error) = database.update_image_visibility(&image_id, &update.is_public).await {
         tracing::error!("failed to update image metadata: {}", error);
         return HttpResponse::InternalServerError()
         .json(ResponseError::new("failed to update image metadata"));
