@@ -10,6 +10,7 @@ use self::{
     docs::generate_docs,
     get::{get_image, get_metadata, get_user_data, get_user_images},
     upload::upload_image,
+    update::update_image_visibility,
 };
 
 pub mod auth;
@@ -18,13 +19,14 @@ mod docs;
 pub mod get;
 pub mod middlewares;
 pub mod upload;
+pub mod update;
 
 pub fn services(config: &mut ServiceConfig) {
     let cors = Cors::default()
         .allow_any_origin()
         .allow_any_header()
         .expose_any_header()
-        .allowed_methods(vec!["GET", "POST", "DELETE"])
+        .allowed_methods(vec!["GET", "POST", "PATCH", "DELETE"])
         .max_age(300);
 
     let docs = generate_docs();
@@ -34,6 +36,7 @@ pub fn services(config: &mut ServiceConfig) {
             .service(upload_image)
             .service(delete_image)
             .service(get_image)
+            .service(update_image_visibility)
             .service(get_metadata)
             .service(get_user_images)
             .service(get_user_data)
@@ -47,6 +50,7 @@ pub struct Image {
     pub id: String,
     pub url: String,
     pub thumbnail_url: String,
+    pub is_public: bool,
     pub metadata: Metadata,
 }
 
@@ -91,6 +95,7 @@ impl From<DBImage> for Image {
             id: value.id.to_string(),
             url: value.url,
             thumbnail_url: value.thumbnail_url,
+            is_public: value.is_public,
             metadata: value.metadata.0,
         }
     }
