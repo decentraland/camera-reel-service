@@ -6,13 +6,14 @@ use actix_web::{
     HttpResponse, Responder
 };
 use serde::Deserialize;
+use utoipa::ToSchema;
 
 use crate::{
     api::{auth::AuthUser, ResponseError},
     database::Database
 };
 
-#[derive(Deserialize)]
+#[derive(Deserialize, ToSchema)]
 struct UpdateVisibility {
     is_public: bool,
 }
