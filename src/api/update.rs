@@ -55,6 +55,10 @@ pub async fn update_image_visibility(
     {
         return HttpResponse::Forbidden().json(ResponseError::new("forbidden"));
     }
+
+    if image.is_public == update.is_public {
+        return HttpResponse::Ok().finish();
+    }
     
     if let Err(error) = database.update_image_visibility(&image_id, &update.is_public).await {
         tracing::error!("failed to update image metadata: {}", error);

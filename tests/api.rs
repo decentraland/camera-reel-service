@@ -29,7 +29,7 @@ async fn test_upload_image() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    upload_test_image("image.png", &address.to_string(), false).await;
+    upload_test_image("image.png", &address.to_string()).await;
 }
 
 #[actix_web::test]
@@ -49,7 +49,7 @@ async fn test_get_multiple_images() {
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
 
     for i in 0..5 {
-        upload_test_image(&format!("image-{i}.png"), &address.to_string(), false).await;
+        upload_test_image(&format!("image-{i}.png"), &address.to_string()).await;
     }
 
     let images_response = reqwest::Client::new()
@@ -72,7 +72,7 @@ async fn test_delete_image() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    let id = upload_test_image("image.png", &address.to_string(), false).await;
+    let id = upload_test_image("image.png", &address.to_string()).await;
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
@@ -115,9 +115,9 @@ async fn test_update_image_visibility() {
     let server: TestServer = create_test_server().await;
     let address = server.addr();
 
-    let id = upload_test_image("image.png", &address.to_string(), true).await;
+    let id = upload_test_image("image.png", &address.to_string()).await;
 
-    // Initial visibility is public (is_public: true)
+    // Initial visibility is private by default
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
@@ -126,9 +126,9 @@ async fn test_update_image_visibility() {
     assert!(response.status().is_success());
 
     let image = response.json::<Image>().await.unwrap();
-    assert_eq!(image.is_public, true);
+    assert_eq!(image.is_public, false);
 
-    // Update visibility to private
+    // Update visibility to public
     let identity = create_test_identity();
     let path = &format!("/api/images/{}/visibility", id);
     let headers = get_signed_headers(identity, "patch", path, "");
@@ -140,7 +140,7 @@ async fn test_update_image_visibility() {
         .header(headers[2].0.clone(), headers[2].1.clone())
         .header(headers[3].0.clone(), headers[3].1.clone())
         .header(headers[4].0.clone(), headers[4].1.clone())
-        .json(&serde_json::json!({ "is_public": false }))
+        .json(&serde_json::json!({ "is_public": true }))
         .send()
         .await
         .unwrap();
@@ -154,5 +154,5 @@ async fn test_update_image_visibility() {
         .unwrap();
     assert!(response.status().is_success());
     let image = response.json::<Image>().await.unwrap();
-    assert_eq!(image.is_public, false);
+    assert_eq!(image.is_public, true);
 }

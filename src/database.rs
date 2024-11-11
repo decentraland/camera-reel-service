@@ -114,10 +114,10 @@ impl Database {
     pub async fn insert_image(&self, image: &Image) -> DBResult<()> {
         sqlx::query("INSERT INTO images (id, user_address, url, thumbnail_url, is_public, metadata) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(parse_uuid(&image.id)?)
-            .bind(&image.metadata.user_address.to_lowercase())
+            .bind(image.metadata.user_address.to_lowercase())
             .bind(&image.url)
             .bind(&image.thumbnail_url)
-            .bind(&image.is_public)
+            .bind(image.is_public)
             .bind(sqlx::types::Json(&image.metadata))
             .execute(&self.pool)
             .await?;
@@ -127,7 +127,7 @@ impl Database {
 
     pub async fn update_image_visibility(&self, id: &str, is_public: &bool) -> DBResult<()> {
         sqlx::query("UPDATE images SET is_public = $1 WHERE id = $2")
-            .bind(&is_public)
+            .bind(is_public)
             .bind(parse_uuid(&id)?)
             .execute(&self.pool)
             .await?;
