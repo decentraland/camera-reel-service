@@ -85,7 +85,7 @@ pub async fn delete_image(
     }
 
     let current_images = database
-        .get_user_images_count(&image.user_address)
+        .get_user_images_count(&image.user_address, false)
         .await
         .unwrap_or(0);
 

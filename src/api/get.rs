@@ -105,7 +105,7 @@ async fn get_user_data(
         }
     }
 
-    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+    let Ok(images_count) = database.get_user_images_count(&user_address, false).await else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
@@ -147,22 +147,36 @@ async fn get_user_images(
 ) -> impl Responder {
     let user_address = user_address.into_inner();
 
+    let mut only_public_images: bool = false;
+
     if matches!(settings.env, Environment::Prod) {
         match AuthUser::extract(&request).await {
             Ok(AuthUser { address }) if address == user_address => {}
             _ => {
-                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+                // return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+                only_public_images = true;
             }
         }
     }
 
     let GetImagesQuery { offset, limit } = query_params.into_inner();
 
-    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+    let Ok(images_count) = database
+        .get_user_images_count(&user_address, only_public_images)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
-    let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
+    let Ok(images) = database
+        .get_user_images(
+            &user_address,
+            offset as i64,
+            limit as i64,
+            only_public_images,
+        )
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 

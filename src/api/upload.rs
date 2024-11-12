@@ -53,7 +53,7 @@ pub async fn upload_image(
     upload: MultipartForm<Upload>,
 ) -> impl Responder {
     let images_count = database
-        .get_user_images_count(&auth_user.address)
+        .get_user_images_count(&auth_user.address, false)
         .await
         .unwrap_or(0);
     if images_count >= settings.max_images_per_user {
@@ -79,13 +79,13 @@ pub async fn upload_image(
         return HttpResponse::BadRequest().json(ResponseError::new("invalid user address"));
     }
 
-    let Some(content_type) = upload.image
+    let Some(content_type) = upload
+        .image
         .content_type
         .as_ref()
-        .map(|content_type| content_type.to_string()) else {
-            return HttpResponse::BadRequest()
-                .json(ResponseError::new("invalid content type"));
-
+        .map(|content_type| content_type.to_string())
+    else {
+        return HttpResponse::BadRequest().json(ResponseError::new("invalid content type"));
     };
 
     match content_type.as_str() {
@@ -96,8 +96,7 @@ pub async fn upload_image(
     }
 
     let Ok(format) = guess_format(image_bytes) else {
-        return HttpResponse::BadRequest()
-            .json(ResponseError::new("invalid image format"));
+        return HttpResponse::BadRequest().json(ResponseError::new("invalid image format"));
     };
 
     let thumbnail = match image::load_from_memory_with_format(image_bytes, format) {

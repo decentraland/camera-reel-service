@@ -2,10 +2,10 @@ use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
     get::{GetImagesResponse, UserDataResponse},
-    Image
+    Image,
 };
-use common::upload_test_image;
 use common::upload_test_failing_image;
+use common::upload_test_image;
 
 use crate::common::{create_test_identity, create_test_server, get_signed_headers};
 
