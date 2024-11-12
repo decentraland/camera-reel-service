@@ -112,12 +112,23 @@ impl Database {
     }
 
     pub async fn insert_image(&self, image: &Image) -> DBResult<()> {
-        sqlx::query("INSERT INTO images (id, user_address, url, thumbnail_url, metadata) VALUES ($1, $2, $3, $4, $5)")
+        sqlx::query("INSERT INTO images (id, user_address, url, thumbnail_url, is_public, metadata) VALUES ($1, $2, $3, $4, $5, $6)")
             .bind(parse_uuid(&image.id)?)
-            .bind(&image.metadata.user_address.to_lowercase())
+            .bind(image.metadata.user_address.to_lowercase())
             .bind(&image.url)
             .bind(&image.thumbnail_url)
+            .bind(image.is_public)
             .bind(sqlx::types::Json(&image.metadata))
+            .execute(&self.pool)
+            .await?;
+
+        Ok(())
+    }
+
+    pub async fn update_image_visibility(&self, id: &str, is_public: &bool) -> DBResult<()> {
+        sqlx::query("UPDATE images SET is_public = $1 WHERE id = $2")
+            .bind(is_public)
+            .bind(parse_uuid(&id)?)
             .execute(&self.pool)
             .await?;
 
@@ -135,6 +146,7 @@ pub struct DBImage {
     pub user_address: String,
     pub url: String,
     pub thumbnail_url: String,
+    pub is_public: bool,
     pub created_at: chrono::NaiveDateTime,
     pub metadata: sqlx::types::Json<Metadata>,
 }

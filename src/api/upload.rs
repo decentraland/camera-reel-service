@@ -160,6 +160,7 @@ pub async fn upload_image(
         id: image_id.clone(),
         url: format!("{http_url}/api/images/{image_name}"),
         thumbnail_url: format!("{http_url}/api/images/{thumbnail_name}"),
+        is_public: false,
         metadata: metadata.clone(),
     };
 
