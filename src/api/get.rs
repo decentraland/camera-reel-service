@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{
-    api::{auth::AuthUser, Image, ResponseError},
+    api::{auth::AuthUser, Image, ImageCompact, ResponseError},
     database::Database,
     Environment, Settings,
 };
@@ -60,6 +60,8 @@ struct GetImagesQuery {
     offset: u64,
     #[serde(default = "default_limit")]
     limit: u64,
+    #[serde(default = "default_compact")]
+    compact: bool,
 }
 
 fn default_offset() -> u64 {
@@ -68,6 +70,10 @@ fn default_offset() -> u64 {
 
 fn default_limit() -> u64 {
     20
+}
+
+fn default_compact() -> bool {
+    false
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
@@ -119,8 +125,8 @@ async fn get_user_data(
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct GetImagesResponse {
-    pub images: Vec<Image>,
+pub struct GetImagesResponse<T> {
+    pub images: Vec<T>,
     #[serde(flatten)]
     pub user_data: UserDataResponse,
 }
@@ -156,7 +162,7 @@ async fn get_user_images(
         }
     }
 
-    let GetImagesQuery { offset, limit } = query_params.into_inner();
+    let GetImagesQuery { offset, limit, compact } = query_params.into_inner();
 
     let Ok(images_count) = database.get_user_images_count(&user_address).await else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
@@ -166,10 +172,16 @@ async fn get_user_images(
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
-    let images = images.into_iter().map(Image::from).collect::<Vec<_>>();
     let user_data = UserDataResponse {
         current_images: images_count,
         max_images: settings.max_images_per_user,
     };
-    HttpResponse::Ok().json(GetImagesResponse { images, user_data })
+
+    if compact {
+        let images = images.into_iter().map(ImageCompact::from).collect::<Vec<ImageCompact>>();
+        return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
+    } else {
+        let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
+        return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
+    };
 }

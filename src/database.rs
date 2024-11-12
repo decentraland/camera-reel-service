@@ -9,7 +9,7 @@ use sqlx::{Error as DBError, Postgres};
 
 use std::str::FromStr;
 
-use crate::api::{Image, Metadata};
+use crate::api::{Image, Metadata, Scene};
 
 pub type DBResult<V> = Result<V, DBError>;
 

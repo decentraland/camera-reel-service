@@ -38,8 +38,6 @@ pub async fn update_image_visibility(
 ) -> impl Responder {
     let image_id = image_id.into_inner();
 
-    println!("Updating image visibility: {}, {}", image_id, update.is_public);
-
     let AuthUser {
         address: request_user_address,
     } = user_address;

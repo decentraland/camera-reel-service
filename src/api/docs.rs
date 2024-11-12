@@ -1,6 +1,7 @@
 use super::delete::*;
 use super::get::*;
 use super::upload::*;
+use super::update::*;
 use super::*;
 use utoipa::OpenApi;
 use utoipa_swagger_ui::SwaggerUi;
@@ -17,18 +18,21 @@ use utoipa_swagger_ui::SwaggerUi;
         get_metadata, 
         get_user_data, 
         get_user_images, 
-        upload_image
+        upload_image,
+        update_image_visibility
     ),
     components(
         schemas(
-            Image, 
+            Image,
+            ImageCompact,
             Metadata, 
             Scene, 
             Location, 
             User, 
             Upload, 
             UploadResponse,
-            GetImagesResponse,
+            GetImagesResponse<Image>,
+            GetImagesResponse<ImageCompact>,
             UserDataResponse,
             ResponseError, 
             ForbiddenError, 

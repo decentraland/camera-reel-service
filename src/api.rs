@@ -54,6 +54,15 @@ pub struct Image {
     pub metadata: Metadata,
 }
 
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ImageCompact {
+    pub id: String,
+    pub thumbnail_url: String,
+    pub is_public: bool,
+    pub date_time: String,
+}
+
 #[derive(Deserialize, Serialize, Debug, Default, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct Metadata {
@@ -97,6 +106,17 @@ impl From<DBImage> for Image {
             thumbnail_url: value.thumbnail_url,
             is_public: value.is_public,
             metadata: value.metadata.0,
+        }
+    }
+}
+
+impl From<DBImage> for ImageCompact {
+    fn from(value: DBImage) -> Self {
+        Self {
+            id: value.id.to_string(),
+            thumbnail_url: value.thumbnail_url,
+            is_public: value.is_public,
+            date_time: value.metadata.0.date_time,
         }
     }
 }
