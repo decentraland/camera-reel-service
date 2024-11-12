@@ -101,17 +101,21 @@ async fn get_user_data(
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
+    let mut only_public_images: bool = false;
 
     if matches!(settings.env, Environment::Prod) {
         match AuthUser::extract(&request).await {
             Ok(AuthUser { address }) if address == user_address => {}
             _ => {
-                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+                only_public_images = true;
             }
         }
     }
 
-    let Ok(images_count) = database.get_user_images_count(&user_address, false).await else {
+    let Ok(images_count) = database
+        .get_user_images_count(&user_address, only_public_images)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
@@ -152,20 +156,22 @@ async fn get_user_images(
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
-
     let mut only_public_images: bool = false;
 
     if matches!(settings.env, Environment::Prod) {
         match AuthUser::extract(&request).await {
             Ok(AuthUser { address }) if address == user_address => {}
             _ => {
-                // return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
                 only_public_images = true;
             }
         }
     }
 
-    let GetImagesQuery { offset, limit, compact } = query_params.into_inner();
+    let GetImagesQuery {
+        offset,
+        limit,
+        compact,
+    } = query_params.into_inner();
 
     let Ok(images_count) = database
         .get_user_images_count(&user_address, only_public_images)
@@ -192,7 +198,10 @@ async fn get_user_images(
     };
 
     if compact {
-        let images = images.into_iter().map(ImageCompact::from).collect::<Vec<ImageCompact>>();
+        let images = images
+            .into_iter()
+            .map(ImageCompact::from)
+            .collect::<Vec<ImageCompact>>();
         return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
     } else {
         let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
