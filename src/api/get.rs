@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{
-    api::{auth::AuthUser, Image, ImageCompact, ResponseError},
+    api::{auth::AuthUser, GalleryImage, Image, ResponseError},
     database::Database,
     Environment, Settings,
 };
@@ -162,13 +162,20 @@ async fn get_user_images(
         }
     }
 
-    let GetImagesQuery { offset, limit, compact } = query_params.into_inner();
+    let GetImagesQuery {
+        offset,
+        limit,
+        compact,
+    } = query_params.into_inner();
 
     let Ok(images_count) = database.get_user_images_count(&user_address).await else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
-    let Ok(images) = database.get_user_images(&user_address, offset as i64, limit as i64).await else {
+    let Ok(images) = database
+        .get_user_images(&user_address, offset as i64, limit as i64)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
@@ -178,7 +185,10 @@ async fn get_user_images(
     };
 
     if compact {
-        let images = images.into_iter().map(ImageCompact::from).collect::<Vec<ImageCompact>>();
+        let images = images
+            .into_iter()
+            .map(GalleryImage::from)
+            .collect::<Vec<GalleryImage>>();
         return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
     } else {
         let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
