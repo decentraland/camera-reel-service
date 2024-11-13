@@ -2,7 +2,7 @@ use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
     get::{GetImagesResponse, UserDataResponse},
-    Image, ImageCompact,
+    GalleryImage, Image,
 };
 use common::upload_test_failing_image;
 use common::upload_test_image;
@@ -86,7 +86,7 @@ async fn test_get_multiple_images_compact() {
         .send()
         .await
         .unwrap()
-        .json::<GetImagesResponse<ImageCompact>>()
+        .json::<GetImagesResponse<GalleryImage>>()
         .await
         .unwrap();
 

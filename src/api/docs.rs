@@ -24,7 +24,7 @@ use utoipa_swagger_ui::SwaggerUi;
     components(
         schemas(
             Image,
-            ImageCompact,
+            GalleryImage,
             Metadata, 
             Scene, 
             Location, 
@@ -32,7 +32,7 @@ use utoipa_swagger_ui::SwaggerUi;
             Upload, 
             UploadResponse,
             GetImagesResponse<Image>,
-            GetImagesResponse<ImageCompact>,
+            GetImagesResponse<GalleryImage>,
             UserDataResponse,
             ResponseError, 
             ForbiddenError, 

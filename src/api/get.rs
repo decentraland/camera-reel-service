@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{
-    api::{auth::AuthUser, Image, ImageCompact, ResponseError},
+    api::{auth::AuthUser, GalleryImage, Image, ResponseError},
     database::Database,
     Environment, Settings,
 };
@@ -200,8 +200,8 @@ async fn get_user_images(
     if compact {
         let images = images
             .into_iter()
-            .map(ImageCompact::from)
-            .collect::<Vec<ImageCompact>>();
+            .map(GalleryImage::from)
+            .collect::<Vec<GalleryImage>>();
         return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
     } else {
         let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
