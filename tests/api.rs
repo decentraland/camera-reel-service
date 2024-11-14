@@ -4,6 +4,7 @@ use camera_reel_service::api::{
     get::{GetImagesResponse, UserDataResponse},
     GalleryImage, Image,
 };
+use common::upload_public_test_image;
 use common::upload_test_failing_image;
 use common::upload_test_image;
 
@@ -141,7 +142,7 @@ async fn test_update_image_visibility() {
     let server: TestServer = create_test_server().await;
     let address = server.addr();
 
-    let id = upload_test_image("image.png", &address.to_string()).await;
+    let id = upload_public_test_image("image.png", &address.to_string()).await;
 
     // Initial visibility is private by default
     let response = reqwest::Client::new()
@@ -152,7 +153,7 @@ async fn test_update_image_visibility() {
     assert!(response.status().is_success());
 
     let image = response.json::<Image>().await.unwrap();
-    assert_eq!(image.is_public, false);
+    assert_eq!(image.is_public, true);
 
     // Update visibility to public
     let identity = create_test_identity();
@@ -166,7 +167,7 @@ async fn test_update_image_visibility() {
         .header(headers[2].0.clone(), headers[2].1.clone())
         .header(headers[3].0.clone(), headers[3].1.clone())
         .header(headers[4].0.clone(), headers[4].1.clone())
-        .json(&serde_json::json!({ "is_public": true }))
+        .json(&serde_json::json!({ "is_public": false }))
         .send()
         .await
         .unwrap();
@@ -180,5 +181,5 @@ async fn test_update_image_visibility() {
         .unwrap();
     assert!(response.status().is_success());
     let image = response.json::<Image>().await.unwrap();
-    assert_eq!(image.is_public, true);
+    assert_eq!(image.is_public, false);
 }

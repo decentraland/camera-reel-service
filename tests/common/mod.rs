@@ -133,7 +133,7 @@ pub async fn create_test_server() -> TestServer {
     })
 }
 
-pub async fn upload_test_image(file_name: &str, address: &str) -> String {
+async fn upload_image(file_name: &str, address: &str, is_public: bool) -> String {
     let identity = create_test_identity();
     // prepare image
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
@@ -157,7 +157,11 @@ pub async fn upload_test_image(file_name: &str, address: &str) -> String {
     let form = reqwest::multipart::Form::new();
     let form = form
         .part("image", image_file_part)
-        .part("metadata", metadata_part);
+        .part("metadata", metadata_part)
+        .part(
+            "is_public",
+            reqwest::multipart::Part::text(is_public.to_string()),
+        );
 
     let path = "/api/images";
     let headers = get_signed_headers(identity, "post", path, "");
@@ -178,6 +182,14 @@ pub async fn upload_test_image(file_name: &str, address: &str) -> String {
     let response: UploadResponse = response.json().await.unwrap();
 
     response.image.id
+}
+
+pub async fn upload_test_image(file_name: &str, address: &str) -> String {
+    upload_image(file_name, address, false).await
+}
+
+pub async fn upload_public_test_image(file_name: &str, address: &str) -> String {
+    upload_image(file_name, address, true).await
 }
 
 pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String {
