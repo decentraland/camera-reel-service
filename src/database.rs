@@ -5,7 +5,7 @@ use sqlx::{
     postgres::{PgConnectOptions, PgPoolOptions},
     PgPool,
 };
-use sqlx::{Error as DBError, Postgres};
+use sqlx::{Error as DBError, Postgres, QueryBuilder};
 
 use std::str::FromStr;
 
@@ -76,28 +76,54 @@ impl Database {
         Ok(image)
     }
 
+    fn build_user_images_query(
+        &self,
+        user: &str,
+        public_only: bool,
+        initial_clause: &str,
+    ) -> QueryBuilder<Postgres> {
+        let mut query_builder = QueryBuilder::new(initial_clause);
+
+        query_builder.push(" WHERE user_address = ");
+        query_builder.push_bind(user.to_lowercase());
+
+        if public_only {
+            query_builder.push(" AND is_public = true");
+        }
+
+        query_builder
+    }
+
     pub async fn get_user_images(
         &self,
         user: &str,
         offset: i64,
         limit: i64,
+        public_only: bool,
     ) -> DBResult<Vec<DBImage>> {
-        let images = sqlx::query_as::<_, DBImage>("SELECT * FROM images WHERE user_address = $1 ORDER BY created_at DESC LIMIT $2 OFFSET $3")
-            .bind(user.to_lowercase())
-            .bind(limit)
-            .bind(offset)
-            .fetch_all(&self.pool)
-            .await?;
+        let mut query_builder =
+            self.build_user_images_query(user, public_only, "SELECT * FROM images");
+
+        query_builder
+            .push(" ORDER BY created_at DESC LIMIT ")
+            .push_bind(limit)
+            .push(" OFFSET ")
+            .push_bind(offset);
+
+        let query = query_builder.build_query_as::<DBImage>();
+
+        let images = query.fetch_all(&self.pool).await?;
 
         Ok(images)
     }
 
-    pub async fn get_user_images_count(&self, user: &str) -> DBResult<u64> {
-        let count =
-            sqlx::query_scalar::<_, i64>("SELECT COUNT(*) FROM images WHERE user_address = $1")
-                .bind(user.to_lowercase())
-                .fetch_one(&self.pool)
-                .await?;
+    pub async fn get_user_images_count(&self, user: &str, public_only: bool) -> DBResult<u64> {
+        let mut query_builder =
+            self.build_user_images_query(user, public_only, "SELECT COUNT(*) FROM images");
+
+        let query = query_builder.build_query_scalar::<i64>();
+
+        let count = query.fetch_one(&self.pool).await?;
 
         Ok(count as u64)
     }

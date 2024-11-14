@@ -101,17 +101,21 @@ async fn get_user_data(
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
+    let mut only_public_images: bool = false;
 
     if matches!(settings.env, Environment::Prod) {
         match AuthUser::extract(&request).await {
             Ok(AuthUser { address }) if address == user_address => {}
             _ => {
-                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+                only_public_images = true;
             }
         }
     }
 
-    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+    let Ok(images_count) = database
+        .get_user_images_count(&user_address, only_public_images)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
@@ -152,12 +156,13 @@ async fn get_user_images(
     database: Data<Database>,
 ) -> impl Responder {
     let user_address = user_address.into_inner();
+    let mut only_public_images: bool = false;
 
     if matches!(settings.env, Environment::Prod) {
         match AuthUser::extract(&request).await {
             Ok(AuthUser { address }) if address == user_address => {}
             _ => {
-                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+                only_public_images = true;
             }
         }
     }
@@ -168,12 +173,20 @@ async fn get_user_images(
         compact,
     } = query_params.into_inner();
 
-    let Ok(images_count) = database.get_user_images_count(&user_address).await else {
+    let Ok(images_count) = database
+        .get_user_images_count(&user_address, only_public_images)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));
     };
 
     let Ok(images) = database
-        .get_user_images(&user_address, offset as i64, limit as i64)
+        .get_user_images(
+            &user_address,
+            offset as i64,
+            limit as i64,
+            only_public_images,
+        )
         .await
     else {
         return HttpResponse::NotFound().json(ResponseError::new("user not found"));

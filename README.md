@@ -73,8 +73,8 @@ Those endpoints are:
 
 - POST `{server}/api/images/`
 - DELETE `{server}/api/images/{image_id}`
-- GET `{server}/api/users/{address}`
-- GET `{server}/api/users/{address}/images`
+- GET `{server}/api/users/{address}` (if non authenticated, it will take into account public images)
+- GET `{server}/api/users/{address}/images` (if non authenticated, it will only return public images)
 - PATCH `{server}/api/images/{image_id}/visibility`
 
 There is an [upload example](examples/upload-image.rs), you can run it:
