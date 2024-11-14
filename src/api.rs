@@ -9,8 +9,8 @@ use self::{
     delete::delete_image,
     docs::generate_docs,
     get::{get_image, get_metadata, get_user_data, get_user_images},
-    upload::upload_image,
     update::update_image_visibility,
+    upload::upload_image,
 };
 
 pub mod auth;
@@ -18,8 +18,8 @@ pub mod delete;
 mod docs;
 pub mod get;
 pub mod middlewares;
-pub mod upload;
 pub mod update;
+pub mod upload;
 
 pub fn services(config: &mut ServiceConfig) {
     let cors = Cors::default()
@@ -52,6 +52,15 @@ pub struct Image {
     pub thumbnail_url: String,
     pub is_public: bool,
     pub metadata: Metadata,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryImage {
+    pub id: String,
+    pub thumbnail_url: String,
+    pub is_public: bool,
+    pub date_time: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, ToSchema)]
@@ -97,6 +106,17 @@ impl From<DBImage> for Image {
             thumbnail_url: value.thumbnail_url,
             is_public: value.is_public,
             metadata: value.metadata.0,
+        }
+    }
+}
+
+impl From<DBImage> for GalleryImage {
+    fn from(value: DBImage) -> Self {
+        Self {
+            id: value.id.to_string(),
+            thumbnail_url: value.thumbnail_url,
+            is_public: value.is_public,
+            date_time: value.metadata.0.date_time,
         }
     }
 }

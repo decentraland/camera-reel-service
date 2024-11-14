@@ -2,10 +2,10 @@ use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
     get::{GetImagesResponse, UserDataResponse},
-    Image
+    GalleryImage, Image,
 };
-use common::upload_test_image;
 use common::upload_test_failing_image;
+use common::upload_test_image;
 
 use crate::common::{create_test_identity, create_test_server, get_signed_headers};
 
@@ -60,7 +60,33 @@ async fn test_get_multiple_images() {
         .send()
         .await
         .unwrap()
-        .json::<GetImagesResponse>()
+        .json::<GetImagesResponse<Image>>()
+        .await
+        .unwrap();
+
+    assert_eq!(images_response.user_data.current_images, 5);
+}
+
+#[actix_web::test]
+async fn test_get_multiple_images_compact() {
+    let server = create_test_server().await;
+    let address = server.addr();
+
+    let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
+
+    for i in 0..5 {
+        upload_test_image(&format!("image-{i}.png"), &address.to_string()).await;
+    }
+
+    let images_response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/users/{}/images?compact=true",
+            address, user_address
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<GetImagesResponse<GalleryImage>>()
         .await
         .unwrap();
 
