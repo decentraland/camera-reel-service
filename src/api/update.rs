@@ -14,7 +14,7 @@ use crate::{
 };
 
 #[derive(Deserialize, ToSchema)]
-struct UpdateVisibility {
+pub struct UpdateVisibility {
     is_public: bool,
 }
 
