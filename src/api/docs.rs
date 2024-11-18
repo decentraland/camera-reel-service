@@ -31,6 +31,7 @@ use utoipa_swagger_ui::SwaggerUi;
             User, 
             Upload, 
             UploadResponse,
+            UpdateVisibility,
             GetImagesResponse<Image>,
             GetImagesResponse<GalleryImage>,
             UserDataResponse,
