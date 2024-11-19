@@ -1,8 +1,8 @@
 use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
-    get::{GetImagesResponse, UserDataResponse},
-    GalleryImage, Image,
+    get::{GetGalleryImagesResponse, GetImagesResponse, UserDataResponse},
+    Image,
 };
 use common::upload_public_test_image;
 use common::upload_test_failing_image;
@@ -61,7 +61,7 @@ async fn test_get_multiple_images() {
         .send()
         .await
         .unwrap()
-        .json::<GetImagesResponse<Image>>()
+        .json::<GetImagesResponse>()
         .await
         .unwrap();
 
@@ -87,7 +87,7 @@ async fn test_get_multiple_images_compact() {
         .send()
         .await
         .unwrap()
-        .json::<GetImagesResponse<GalleryImage>>()
+        .json::<GetGalleryImagesResponse>()
         .await
         .unwrap();
 

@@ -58,6 +58,7 @@ pub struct Image {
 #[serde(rename_all = "camelCase")]
 pub struct GalleryImage {
     pub id: String,
+    pub url: String,
     pub thumbnail_url: String,
     pub is_public: bool,
     pub date_time: String,
@@ -114,6 +115,7 @@ impl From<DBImage> for GalleryImage {
     fn from(value: DBImage) -> Self {
         Self {
             id: value.id.to_string(),
+            url: value.url,
             thumbnail_url: value.thumbnail_url,
             is_public: value.is_public,
             date_time: value.metadata.0.date_time,
