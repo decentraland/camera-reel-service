@@ -92,8 +92,8 @@ impl Database {
                 query_builder.push_bind(filter_value.to_lowercase());
             }
             "place_id" => {
-                query_builder.push("metadata->>'place_id' = ");
-                let uuid = parse_uuid(filter_value)?;
+                query_builder.push("metadata->>'placeId' = ");
+                let uuid = parse_uuid(filter_value)?.to_string();
                 query_builder.push_bind(uuid);
             }
             _ => {
@@ -227,7 +227,7 @@ fn parse_uuid(uuid: &str) -> Result<Uuid, DBError> {
     Uuid::parse_str(uuid).map_err(|_| DBError::Protocol("Invalid UUID".to_string()))
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct DBImage {
     pub id: Uuid,
     pub user_address: String,
