@@ -129,8 +129,16 @@ async fn get_user_data(
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
-pub struct GetImagesResponse<T> {
-    pub images: Vec<T>,
+pub struct GetImagesResponse {
+    pub images: Vec<Image>,
+    #[serde(flatten)]
+    pub user_data: UserDataResponse,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetGalleryImagesResponse {
+    pub images: Vec<GalleryImage>,
     #[serde(flatten)]
     pub user_data: UserDataResponse,
 }
@@ -144,6 +152,7 @@ pub struct GetImagesResponse<T> {
     ),
     responses(
         (status = 200, description = "List images for a given user", body = GetImagesResponse),
+        (status = 210, description = "List gallery images for a given user if `compact=true` (status code is 200, but was not possible to list multiple responses for one status code)", body = GetGalleryImagesResponse),
         (status = 404, description = "Not found")
     )
 )]
@@ -202,7 +211,7 @@ async fn get_user_images(
             .into_iter()
             .map(GalleryImage::from)
             .collect::<Vec<GalleryImage>>();
-        return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
+        return HttpResponse::Ok().json(GetGalleryImagesResponse { images, user_data });
     } else {
         let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
         return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
