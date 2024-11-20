@@ -13,15 +13,6 @@ use crate::{
     Environment, Settings,
 };
 
-#[derive(Deserialize, Debug, ToSchema)]
-pub struct PaginationParams {
-    #[serde(default = "default_offset")]
-    offset: u64,
-
-    #[serde(default = "default_limit")]
-    limit: u64,
-}
-
 #[tracing::instrument(skip(settings))]
 #[utoipa::path(
     tag = "images",
@@ -65,8 +56,10 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
 
 #[derive(Deserialize, Debug, IntoParams)]
 struct GetImagesQuery {
-    #[serde(flatten)]
-    pagination: PaginationParams,
+    #[serde(default = "default_offset")]
+    offset: u64,
+    #[serde(default = "default_limit")]
+    limit: u64,
     #[serde(default = "default_compact")]
     compact: bool,
 }
@@ -184,7 +177,8 @@ async fn get_user_images(
     }
 
     let GetImagesQuery {
-        pagination: PaginationParams { offset, limit },
+        offset,
+        limit,
         compact,
     } = query_params.into_inner();
 
@@ -226,8 +220,10 @@ async fn get_user_images(
 
 #[derive(Deserialize, Debug, IntoParams)]
 struct GetPlaceImagesQuery {
-    #[serde(flatten)]
-    pagination: PaginationParams,
+    #[serde(default = "default_offset")]
+    offset: u64,
+    #[serde(default = "default_limit")]
+    limit: u64,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
@@ -265,9 +261,7 @@ async fn get_place_images(
     settings: Data<Settings>,
     database: Data<Database>,
 ) -> impl Responder {
-    let GetPlaceImagesQuery {
-        pagination: PaginationParams { offset, limit },
-    } = query_params.into_inner();
+    let GetPlaceImagesQuery { offset, limit } = query_params.into_inner();
 
     let Ok(images_count) = database.get_place_images_count(&place_id).await else {
         return HttpResponse::NotFound().json(ResponseError::new("place not found"));

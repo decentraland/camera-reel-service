@@ -24,7 +24,6 @@ use utoipa_swagger_ui::SwaggerUi;
     ),
     components(
         schemas(
-            PaginationParams,
             Image,
             GalleryImage,
             Metadata,
