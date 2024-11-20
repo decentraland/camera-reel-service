@@ -8,7 +8,7 @@ use crate::database::DBImage;
 use self::{
     delete::delete_image,
     docs::generate_docs,
-    get::{get_image, get_metadata, get_user_data, get_user_images},
+    get::{get_image, get_metadata, get_place_images, get_user_data, get_user_images},
     update::update_image_visibility,
     upload::upload_image,
 };
@@ -40,6 +40,7 @@ pub fn services(config: &mut ServiceConfig) {
             .service(get_metadata)
             .service(get_user_images)
             .service(get_user_data)
+            .service(get_place_images)
             .wrap(cors),
     );
 }
@@ -73,6 +74,7 @@ pub struct Metadata {
     pub realm: String,
     pub scene: Scene,
     pub visible_people: Vec<User>,
+    pub place_id: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, ToSchema)]

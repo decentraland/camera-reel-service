@@ -76,33 +76,55 @@ impl Database {
         Ok(image)
     }
 
-    fn build_user_images_query(
+    fn build_images_query<'a>(
         &self,
-        user: &str,
+        filter_field: &str,
+        filter_value: &'a str,
         public_only: bool,
-        initial_clause: &str,
-    ) -> QueryBuilder<Postgres> {
+        initial_clause: &'a str,
+    ) -> Result<QueryBuilder<'a, Postgres>, DBError> {
         let mut query_builder = QueryBuilder::new(initial_clause);
 
-        query_builder.push(" WHERE user_address = ");
-        query_builder.push_bind(user.to_lowercase());
+        query_builder.push(" WHERE ");
+        match filter_field {
+            "user_address" => {
+                query_builder.push("user_address = ");
+                query_builder.push_bind(filter_value.to_lowercase());
+            }
+            "place_id" => {
+                query_builder.push("metadata->>'placeId' = ");
+                let uuid = parse_uuid(filter_value)?.to_string();
+                query_builder.push_bind(uuid);
+            }
+            _ => {
+                return Err(DBError::Protocol(format!(
+                    "Unsupported filter field: {}",
+                    filter_field
+                )));
+            }
+        }
 
         if public_only {
             query_builder.push(" AND is_public = true");
         }
 
-        query_builder
+        Ok(query_builder)
     }
 
-    pub async fn get_user_images(
+    async fn get_images(
         &self,
-        user: &str,
+        filter_field: &str,
+        filter_value: &str,
         offset: i64,
         limit: i64,
         public_only: bool,
     ) -> DBResult<Vec<DBImage>> {
-        let mut query_builder =
-            self.build_user_images_query(user, public_only, "SELECT * FROM images");
+        let mut query_builder = self.build_images_query(
+            filter_field,
+            filter_value,
+            public_only,
+            "SELECT * FROM images",
+        )?;
 
         query_builder
             .push(" ORDER BY created_at DESC LIMIT ")
@@ -117,15 +139,54 @@ impl Database {
         Ok(images)
     }
 
-    pub async fn get_user_images_count(&self, user: &str, public_only: bool) -> DBResult<u64> {
-        let mut query_builder =
-            self.build_user_images_query(user, public_only, "SELECT COUNT(*) FROM images");
+    async fn get_images_count(
+        &self,
+        filter_field: &str,
+        filter_value: &str,
+        public_only: bool,
+    ) -> DBResult<u64> {
+        let mut query_builder = self.build_images_query(
+            filter_field,
+            filter_value,
+            public_only,
+            "SELECT COUNT(*) FROM images",
+        )?;
 
         let query = query_builder.build_query_scalar::<i64>();
 
         let count = query.fetch_one(&self.pool).await?;
 
         Ok(count as u64)
+    }
+
+    pub async fn get_user_images(
+        &self,
+        user: &str,
+        offset: i64,
+        limit: i64,
+        public_only: bool,
+    ) -> DBResult<Vec<DBImage>> {
+        self.get_images("user_address", user, offset, limit, public_only)
+            .await
+    }
+
+    pub async fn get_place_images(
+        &self,
+        place_id: &str,
+        offset: i64,
+        limit: i64,
+    ) -> DBResult<Vec<DBImage>> {
+        self.get_images("place_id", place_id, offset, limit, true)
+            .await
+    }
+
+    pub async fn get_user_images_count(&self, user: &str, public_only: bool) -> DBResult<u64> {
+        self.get_images_count("user_address", user, public_only)
+            .await
+    }
+
+    pub async fn get_place_images_count(&self, place_id: &str) -> DBResult<u64> {
+        self.get_images_count("place_id", place_id, true).await
     }
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {
@@ -166,7 +227,7 @@ fn parse_uuid(uuid: &str) -> Result<Uuid, DBError> {
     Uuid::parse_str(uuid).map_err(|_| DBError::Protocol("Invalid UUID".to_string()))
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(sqlx::FromRow, Debug)]
 pub struct DBImage {
     pub id: Uuid,
     pub user_address: String,
