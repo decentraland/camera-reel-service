@@ -13,6 +13,15 @@ use crate::{
     Environment, Settings,
 };
 
+#[derive(Deserialize, Debug, ToSchema)]
+pub struct PaginationParams {
+    #[serde(default = "default_offset")]
+    offset: u64,
+
+    #[serde(default = "default_limit")]
+    limit: u64,
+}
+
 #[tracing::instrument(skip(settings))]
 #[utoipa::path(
     tag = "images",
@@ -56,10 +65,8 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
 
 #[derive(Deserialize, Debug, IntoParams)]
 struct GetImagesQuery {
-    #[serde(default = "default_offset")]
-    offset: u64,
-    #[serde(default = "default_limit")]
-    limit: u64,
+    #[serde(flatten)]
+    pagination: PaginationParams,
     #[serde(default = "default_compact")]
     compact: bool,
 }
@@ -177,8 +184,7 @@ async fn get_user_images(
     }
 
     let GetImagesQuery {
-        offset,
-        limit,
+        pagination: PaginationParams { offset, limit },
         compact,
     } = query_params.into_inner();
 
@@ -216,4 +222,73 @@ async fn get_user_images(
         let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
         return HttpResponse::Ok().json(GetImagesResponse { images, user_data });
     };
+}
+
+#[derive(Deserialize, Debug, IntoParams)]
+struct GetPlaceImagesQuery {
+    #[serde(flatten)]
+    pagination: PaginationParams,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaceDataResponse {
+    pub current_images: u64,
+    pub max_images: u64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetPlaceImagesResponse {
+    pub images: Vec<GalleryImage>,
+    #[serde(flatten)]
+    pub place_data: PlaceDataResponse,
+}
+
+#[tracing::instrument(skip(database, settings))]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    params(
+        GetPlaceImagesQuery
+    ),
+    responses(
+        (status = 200, description = "List images for a given place", body = GetPlaceImagesResponse),
+        (status = 404, description = "Not found")
+    )
+)]
+#[get("/places/{place_id}/images")]
+async fn get_place_images(
+    place_id: Path<String>,
+    query_params: Query<GetPlaceImagesQuery>,
+    request: HttpRequest,
+    settings: Data<Settings>,
+    database: Data<Database>,
+) -> impl Responder {
+    let GetPlaceImagesQuery {
+        pagination: PaginationParams { offset, limit },
+    } = query_params.into_inner();
+
+    let Ok(images_count) = database.get_place_images_count(&place_id).await else {
+        return HttpResponse::NotFound().json(ResponseError::new("place not found"));
+    };
+
+    let Ok(images) = database
+        .get_place_images(&place_id, offset as i64, limit as i64)
+        .await
+    else {
+        return HttpResponse::NotFound().json(ResponseError::new("place not found"));
+    };
+
+    let place_data = PlaceDataResponse {
+        current_images: images_count,
+        max_images: settings.max_images_per_user,
+    };
+
+    let images = images
+        .into_iter()
+        .map(GalleryImage::from)
+        .collect::<Vec<GalleryImage>>();
+
+    return HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data });
 }
