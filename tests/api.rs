@@ -1,12 +1,13 @@
 use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
-    get::{GetGalleryImagesResponse, GetImagesResponse, UserDataResponse},
+    get::{GetGalleryImagesResponse, GetImagesResponse, GetPlaceImagesResponse, UserDataResponse},
     Image,
 };
-use common::upload_public_test_image;
 use common::upload_test_failing_image;
 use common::upload_test_image;
+use common::{get_place_id, upload_public_test_image};
+use sqlx::types::Uuid;
 
 use crate::common::{create_test_identity, create_test_server, get_signed_headers};
 
@@ -29,8 +30,9 @@ async fn test_live() {
 async fn test_upload_image() {
     let server = create_test_server().await;
     let address = server.addr();
+    let place_id = get_place_id();
 
-    upload_test_image("image.png", &address.to_string()).await;
+    upload_test_image("image.png", &address.to_string(), &place_id).await;
 }
 
 #[actix_web::test]
@@ -48,9 +50,10 @@ async fn test_get_multiple_images() {
     let address = server.addr();
 
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
+    let place_id = get_place_id();
 
     for i in 0..5 {
-        upload_test_image(&format!("image-{i}.png"), &address.to_string()).await;
+        upload_test_image(&format!("image-{i}.png"), &address.to_string(), &place_id).await;
     }
 
     let images_response = reqwest::Client::new()
@@ -74,9 +77,10 @@ async fn test_get_multiple_images_compact() {
     let address = server.addr();
 
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
+    let place_id = get_place_id();
 
     for i in 0..5 {
-        upload_test_image(&format!("image-{i}.png"), &address.to_string()).await;
+        upload_test_image(&format!("image-{i}.png"), &address.to_string(), &place_id).await;
     }
 
     let images_response = reqwest::Client::new()
@@ -98,8 +102,9 @@ async fn test_get_multiple_images_compact() {
 async fn test_delete_image() {
     let server = create_test_server().await;
     let address = server.addr();
+    let place_id = Uuid::new_v4().to_string();
 
-    let id = upload_test_image("image.png", &address.to_string()).await;
+    let id = upload_test_image("image.png", &address.to_string(), &place_id).await;
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
@@ -125,7 +130,6 @@ async fn test_delete_image() {
 
     assert!(response.status().is_success());
     let response = response.json::<UserDataResponse>().await;
-    println!("{:?}", response);
     assert!(response.is_ok());
 
     let response = reqwest::Client::new()
@@ -141,8 +145,9 @@ async fn test_delete_image() {
 async fn test_update_image_visibility() {
     let server: TestServer = create_test_server().await;
     let address = server.addr();
+    let place_id = Uuid::new_v4().to_string();
 
-    let id = upload_public_test_image("image.png", &address.to_string()).await;
+    let id = upload_public_test_image("image.png", &address.to_string(), &place_id).await;
 
     // Initial visibility is private by default
     let response = reqwest::Client::new()
@@ -182,4 +187,40 @@ async fn test_update_image_visibility() {
     assert!(response.status().is_success());
     let image = response.json::<Image>().await.unwrap();
     assert_eq!(image.is_public, false);
+}
+
+#[actix_web::test]
+async fn test_get_multiple_images_by_place() {
+    let server = create_test_server().await;
+    let address = server.addr();
+    let place_id = get_place_id();
+
+    for i in 0..5 {
+        upload_test_image(
+            &format!("image-pr-{i}.png"),
+            &address.to_string(),
+            &place_id,
+        )
+        .await;
+        upload_public_test_image(
+            &format!("image-pu-{i}.png"),
+            &address.to_string(),
+            &place_id,
+        )
+        .await;
+    }
+
+    let images_response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/{}/images",
+            address, place_id
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<GetPlaceImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(images_response.place_data.current_images, 5);
 }

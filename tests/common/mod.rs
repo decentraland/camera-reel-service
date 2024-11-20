@@ -133,7 +133,7 @@ pub async fn create_test_server() -> TestServer {
     })
 }
 
-async fn upload_image(file_name: &str, address: &str, is_public: bool) -> String {
+async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id: &str) -> String {
     let identity = create_test_identity();
     // prepare image
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
@@ -145,6 +145,7 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool) -> String
     // prepare image metadata
     let metadata = Metadata {
         user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
+        place_id: place_id.to_string(),
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
@@ -184,12 +185,12 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool) -> String
     response.image.id
 }
 
-pub async fn upload_test_image(file_name: &str, address: &str) -> String {
-    upload_image(file_name, address, false).await
+pub async fn upload_test_image(file_name: &str, address: &str, place_id: &str) -> String {
+    upload_image(file_name, address, false, place_id).await
 }
 
-pub async fn upload_public_test_image(file_name: &str, address: &str) -> String {
-    upload_image(file_name, address, true).await
+pub async fn upload_public_test_image(file_name: &str, address: &str, place_id: &str) -> String {
+    upload_image(file_name, address, true, place_id).await
 }
 
 pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String {
@@ -272,4 +273,8 @@ pub fn get_signed_headers(
         ("X-Identity-Timestamp".to_string(), ts.to_string()),
         ("X-Identity-Metadata".to_string(), metadata.to_string()),
     ]
+}
+
+pub fn get_place_id() -> String {
+    "f888b899-c509-44d1-af21-717a4cef654e".to_string()
 }
