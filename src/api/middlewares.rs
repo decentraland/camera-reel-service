@@ -22,7 +22,7 @@ fn validate_token(bearer_token: String, request: &ServiceRequest) -> Result<(), 
             Some(Ok(token)) if token.len() > 7 => {
                 let mut parts = token.splitn(2, ' ');
                 match parts.next() {
-                    Some(scheme) if scheme == "Bearer" => {}
+                    Some("Bearer") => {}
                     _ => return Err(ErrorUnauthorized("Wrong schema")),
                 }
                 match parts.next() {

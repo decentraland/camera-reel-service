@@ -215,7 +215,7 @@ impl Database {
     pub async fn update_image_visibility(&self, id: &str, is_public: &bool) -> DBResult<()> {
         sqlx::query("UPDATE images SET is_public = $1 WHERE id = $2")
             .bind(is_public)
-            .bind(parse_uuid(&id)?)
+            .bind(parse_uuid(id)?)
             .execute(&self.pool)
             .await?;
 
