@@ -1,7 +1,10 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use actix_test::TestServer;
-use actix_web::{web::Data, App};
+use actix_web::{
+    web::{scope, Data},
+    App,
+};
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::{
     api::{self, upload::UploadResponse, Metadata, ResponseError},
@@ -128,7 +131,7 @@ pub async fn create_test_server() -> TestServer {
             .app_data(context.settings.clone())
             .app_data(context.bucket.clone())
             .app_data(context.database.clone())
-            .service(live)
+            .service(scope("/health").service(live))
             .configure(api::services)
     })
 }
