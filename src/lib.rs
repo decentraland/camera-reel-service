@@ -1,4 +1,8 @@
-use actix_web::{get, web::Data, App, HttpResponse, HttpServer, Responder};
+use actix_web::{
+    get,
+    web::{scope, Data},
+    App, HttpResponse, HttpServer, Responder,
+};
 use database::Database;
 use dcl_http_prom_metrics::HttpMetricsCollectorBuilder;
 use s3::Bucket;
@@ -48,12 +52,19 @@ pub async fn run(context: Context) -> std::io::Result<()> {
 
     let server = HttpServer::new(move || {
         let logger = TracingLogger::default();
+
+        let health_cors = actix_cors::Cors::default()
+            .allow_any_origin()
+            .allowed_methods(vec!["GET"])
+            .allow_any_header()
+            .max_age(3600);
+
         App::new()
             .app_data(settings.clone())
             .app_data(bucket.clone())
             .app_data(database.clone())
             .app_data(http_metrics_collector.clone())
-            .service(live)
+            .service(scope("/health").wrap(health_cors).service(live))
             .configure(api::services)
             .wrap(dcl_http_prom_metrics::metrics())
             .wrap(middlewares::metrics_token(&metrics_token))
@@ -79,7 +90,7 @@ fn initialize_tracing() {
 }
 
 #[tracing::instrument]
-#[get("/health/live")]
+#[get("/live")]
 async fn live() -> impl Responder {
     HttpResponse::Ok().json("alive")
 }
