@@ -23,6 +23,7 @@ async fn test_live() {
         .send()
         .await
         .unwrap();
+
     assert!(response.status().is_success());
 }
 
