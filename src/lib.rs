@@ -55,7 +55,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
 
         let health_cors = actix_cors::Cors::default()
             .allow_any_origin()
-            .allowed_methods(vec!["GET"])
+            .allowed_methods(vec!["GET", "OPTIONS"])
             .allow_any_header()
             .max_age(3600);
 
