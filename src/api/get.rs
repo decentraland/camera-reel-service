@@ -10,7 +10,7 @@ use utoipa::{IntoParams, ToSchema};
 use crate::{
     api::{auth::AuthUser, GalleryImage, Image, ResponseError},
     database::Database,
-    Environment, Settings,
+    Settings,
 };
 
 #[tracing::instrument(skip(settings))]
@@ -103,12 +103,10 @@ async fn get_user_data(
     let user_address = user_address.into_inner();
     let mut only_public_images: bool = false;
 
-    if matches!(settings.env, Environment::Prod) {
-        match AuthUser::extract(&request).await {
-            Ok(AuthUser { address }) if address == user_address => {}
-            _ => {
-                only_public_images = true;
-            }
+    match AuthUser::extract(&request).await {
+        Ok(AuthUser { address }) if address == user_address => {}
+        _ => {
+            only_public_images = true;
         }
     }
 
@@ -167,12 +165,10 @@ async fn get_user_images(
     let user_address = user_address.into_inner();
     let mut only_public_images: bool = false;
 
-    if matches!(settings.env, Environment::Prod) {
-        match AuthUser::extract(&request).await {
-            Ok(AuthUser { address }) if address == user_address => {}
-            _ => {
-                only_public_images = true;
-            }
+    match AuthUser::extract(&request).await {
+        Ok(AuthUser { address }) if address == user_address => {}
+        _ => {
+            only_public_images = true;
         }
     }
 
