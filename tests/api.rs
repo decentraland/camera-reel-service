@@ -49,19 +49,24 @@ async fn test_upload_failing_image() {
 async fn test_get_multiple_images() {
     let server = create_test_server().await;
     let address = server.addr();
-
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
     let place_id = get_place_id();
+    let identity = create_test_identity();
 
     for i in 0..5 {
         upload_test_image(&format!("image-{i}.png"), &address.to_string(), &place_id).await;
     }
 
+    let path = &format!("/api/users/{}/images", user_address);
+    let headers = get_signed_headers(identity, "get", path, "");
+
     let images_response = reqwest::Client::new()
-        .get(&format!(
-            "http://{}/api/users/{}/images",
-            address, user_address
-        ))
+        .get(&format!("http://{}{}", address, path))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
         .send()
         .await
         .unwrap()
@@ -73,22 +78,59 @@ async fn test_get_multiple_images() {
 }
 
 #[actix_web::test]
-async fn test_get_multiple_images_compact() {
+async fn test_get_multiple_only_public_images() {
     let server = create_test_server().await;
     let address = server.addr();
-
-    let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
+    let not_my_user_address = "0x6949f9f239d1a0816ce5eb364a1f588ae9cc1bf4".to_string();
     let place_id = get_place_id();
+    let identity = create_test_identity();
 
     for i in 0..5 {
         upload_test_image(&format!("image-{i}.png"), &address.to_string(), &place_id).await;
     }
 
+    let path = &format!("/api/users/{}/images", not_my_user_address);
+    let headers = get_signed_headers(identity, "get", path, "");
+
     let images_response = reqwest::Client::new()
-        .get(&format!(
-            "http://{}/api/users/{}/images?compact=true",
-            address, user_address
-        ))
+        .get(&format!("http://{}{}", address, path))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap()
+        .json::<GetImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(images_response.user_data.current_images, 0);
+}
+
+#[actix_web::test]
+async fn test_get_multiple_images_compact() {
+    let server = create_test_server().await;
+    let address = server.addr();
+    let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
+    let place_id = get_place_id();
+    let identity = create_test_identity();
+
+    for i in 0..5 {
+        upload_test_image(&format!("image-{i}.png"), &address.to_string(), &place_id).await;
+    }
+
+    let path = &format!("/api/users/{}/images", user_address);
+    let headers = get_signed_headers(identity, "get", path, "");
+
+    let images_response = reqwest::Client::new()
+        .get(&format!("http://{}{}?compact=true", address, path))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
         .send()
         .await
         .unwrap()

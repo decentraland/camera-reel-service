@@ -10,7 +10,7 @@ use utoipa::{IntoParams, ToSchema};
 use crate::{
     api::{auth::AuthUser, GalleryImage, Image, ResponseError},
     database::Database,
-    Environment, Settings,
+    Settings,
 };
 
 #[tracing::instrument(skip(settings))]
