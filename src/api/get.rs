@@ -225,7 +225,6 @@ struct GetPlaceImagesQuery {
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct PlaceDataResponse {
-    pub current_images: u64,
     pub max_images: u64,
 }
 
@@ -237,7 +236,7 @@ pub struct GetPlaceImagesResponse {
     pub place_data: PlaceDataResponse,
 }
 
-#[tracing::instrument(skip(database, settings))]
+#[tracing::instrument(skip(database))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
@@ -254,7 +253,6 @@ async fn get_place_images(
     place_id: Path<String>,
     query_params: Query<GetPlaceImagesQuery>,
     request: HttpRequest,
-    settings: Data<Settings>,
     database: Data<Database>,
 ) -> impl Responder {
     let GetPlaceImagesQuery { offset, limit } = query_params.into_inner();
@@ -271,8 +269,7 @@ async fn get_place_images(
     };
 
     let place_data = PlaceDataResponse {
-        current_images: images_count,
-        max_images: settings.max_images_per_user,
+        max_images: images_count,
     };
 
     let images = images

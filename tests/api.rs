@@ -265,5 +265,5 @@ async fn test_get_multiple_images_by_place() {
         .await
         .unwrap();
 
-    assert_eq!(images_response.place_data.current_images, 5);
+    assert_eq!(images_response.place_data.max_images, 5);
 }
