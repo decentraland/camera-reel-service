@@ -56,8 +56,11 @@ impl Database {
         let mut db_options = DatabaseOptions::new(url);
         db_options.pool_options = db_options
             .pool_options
-            .min_connections(5)
-            .max_connections(50);
+            .min_connections(5) // Minimum pool size - keep at least 5 connections ready
+            .max_connections(50) // Maximum pool size - prevent resource exhaustion
+            .acquire_timeout(std::time::Duration::from_secs(8)) // Fail fast if can't get connection (shorter than typical web timeouts)
+            .idle_timeout(std::time::Duration::from_secs(60)) // Close unused connections after 1 min to free up resources
+            .max_lifetime(std::time::Duration::from_secs(300)); // Recycle connections every 5 min to prevent stale/broken connections
         match db_options.connect().await {
             Ok(db) => {
                 db.migrate().await?;
