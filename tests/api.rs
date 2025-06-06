@@ -276,11 +276,9 @@ async fn test_get_multiple_places_images() {
     let server = create_test_server().await;
     let address = server.addr();
 
-    // Create two different place IDs
     let place_id1 = get_place_id();
     let place_id2 = Uuid::new_v4().to_string();
 
-    // Upload images to both places
     for i in 0..3 {
         upload_public_test_image(
             &format!("image-p1-{i}.png"),
@@ -296,7 +294,6 @@ async fn test_get_multiple_places_images() {
         .await;
     }
 
-    // Test the new endpoint
     let response = reqwest::Client::new()
         .get(&format!(
             "http://{}/api/places/images?place_ids={}&place_ids={}",
