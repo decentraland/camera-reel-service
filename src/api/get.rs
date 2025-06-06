@@ -43,15 +43,13 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
             let image: Image = image.into();
             HttpResponse::Ok().json(image)
         }
-        Err(sqlx::Error::ColumnDecode {
-            index: _,
-            source: _,
-        }) => HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image")),
-        Err(sqlx::Error::RowNotFound) => {
-            HttpResponse::NotFound().json(ResponseError::new("image not found"))
+        Err(sqlx::Error::ColumnDecode { source, .. }) => {
+            tracing::debug!("Couldn't decode image metadata: {source:?}");
+            HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image"))
         }
         Err(e) => {
-            HttpResponse::NotFound().json(ResponseError::new(&format!("image not found: {e:?}")))
+            tracing::debug!("Image not found: {e:?}");
+            HttpResponse::NotFound().json(ResponseError::new("image not found"))
         }
     }
 }
