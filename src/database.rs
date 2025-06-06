@@ -83,6 +83,13 @@ impl Database {
         public_only: bool,
         initial_clause: &'a str,
     ) -> Result<QueryBuilder<'a, Postgres>, DBError> {
+        tracing::info!(
+            "Building query with filter_field: {}, filter_value: {}, public_only: {}",
+            filter_field,
+            filter_value,
+            public_only
+        );
+
         let mut query_builder = QueryBuilder::new(initial_clause);
 
         query_builder.push(" WHERE ");
@@ -96,7 +103,18 @@ impl Database {
                 let uuid = parse_uuid(filter_value)?.to_string();
                 query_builder.push_bind(uuid);
             }
+            "place_ids" => {
+                query_builder.push("metadata->>'placeId' = ANY(");
+                let place_ids = filter_value
+                    .split(',')
+                    .map(|s| s.trim().to_string())
+                    .collect::<Vec<String>>();
+                tracing::info!("Parsed place IDs for query: {:?}", place_ids);
+                query_builder.push_bind(place_ids);
+                query_builder.push(")");
+            }
             _ => {
+                tracing::error!("Unsupported filter field: {}", filter_field);
                 return Err(DBError::Protocol(format!(
                     "Unsupported filter field: {}",
                     filter_field
@@ -145,6 +163,13 @@ impl Database {
         filter_value: &str,
         public_only: bool,
     ) -> DBResult<u64> {
+        tracing::info!(
+            "Getting images count for filter_field: {}, filter_value: {}, public_only: {}",
+            filter_field,
+            filter_value,
+            public_only
+        );
+
         let mut query_builder = self.build_images_query(
             filter_field,
             filter_value,
@@ -153,8 +178,8 @@ impl Database {
         )?;
 
         let query = query_builder.build_query_scalar::<i64>();
-
         let count = query.fetch_one(&self.pool).await?;
+        tracing::info!("Query returned count: {}", count);
 
         Ok(count as u64)
     }
@@ -180,6 +205,17 @@ impl Database {
             .await
     }
 
+    pub async fn get_multiple_places_images(
+        &self,
+        place_ids: &[String],
+        offset: i64,
+        limit: i64,
+    ) -> DBResult<Vec<DBImage>> {
+        let place_ids_str = place_ids.join(",");
+        self.get_images("place_ids", &place_ids_str, offset, limit, true)
+            .await
+    }
+
     pub async fn get_user_images_count(&self, user: &str, public_only: bool) -> DBResult<u64> {
         self.get_images_count("user_address", user, public_only)
             .await
@@ -187,6 +223,12 @@ impl Database {
 
     pub async fn get_place_images_count(&self, place_id: &str) -> DBResult<u64> {
         self.get_images_count("place_id", place_id, true).await
+    }
+
+    pub async fn get_multiple_places_images_count(&self, place_ids: &[String]) -> DBResult<u64> {
+        let place_ids_str = place_ids.join(",");
+        self.get_images_count("place_ids", &place_ids_str, true)
+            .await
     }
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {

@@ -1,7 +1,10 @@
 use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
-    get::{GetGalleryImagesResponse, GetImagesResponse, GetPlaceImagesResponse, UserDataResponse},
+    get::{
+        GetGalleryImagesResponse, GetImagesResponse, GetMultiplePlacesImagesResponse,
+        GetPlaceImagesResponse, UserDataResponse,
+    },
     Image,
 };
 use common::upload_test_failing_image;
@@ -266,4 +269,47 @@ async fn test_get_multiple_images_by_place() {
         .unwrap();
 
     assert_eq!(images_response.place_data.max_images, 5);
+}
+
+#[actix_web::test]
+async fn test_get_multiple_places_images() {
+    let server = create_test_server().await;
+    let address = server.addr();
+
+    // Create two different place IDs
+    let place_id1 = get_place_id();
+    let place_id2 = Uuid::new_v4().to_string();
+
+    // Upload images to both places
+    for i in 0..3 {
+        upload_public_test_image(
+            &format!("image-p1-{i}.png"),
+            &address.to_string(),
+            &place_id1,
+        )
+        .await;
+        upload_public_test_image(
+            &format!("image-p2-{i}.png"),
+            &address.to_string(),
+            &place_id2,
+        )
+        .await;
+    }
+
+    // Test the new endpoint
+    let place_ids = format!("{},{}", place_id1, place_id2);
+    let response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/images?place_ids={}",
+            address, place_ids
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<GetMultiplePlacesImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(response.place_data.max_images, 6);
+    assert_eq!(response.images.len(), 6);
 }

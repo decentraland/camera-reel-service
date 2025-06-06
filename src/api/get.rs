@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 use crate::{
-    api::{auth::AuthUser, GalleryImage, Image, ResponseError},
+    api::{auth::AuthUser, GalleryImage, GalleryImageWithPlace, Image, ResponseError},
     database::Database,
     Settings,
 };
@@ -145,9 +145,6 @@ pub struct GetGalleryImagesResponse {
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
-    params(
-        GetImagesQuery
-    ),
     responses(
         (status = 200, description = "List images for a given user", body = GetImagesResponse),
         (status = 210, description = "List gallery images for a given user if `compact=true` (status code is 200, but was not possible to list multiple responses for one status code)", body = GetGalleryImagesResponse),
@@ -231,7 +228,7 @@ pub struct PlaceDataResponse {
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPlaceImagesResponse {
-    pub images: Vec<GalleryImage>,
+    pub images: Vec<GalleryImageWithPlace>,
     #[serde(flatten)]
     pub place_data: PlaceDataResponse,
 }
@@ -274,8 +271,94 @@ async fn get_place_images(
 
     let images = images
         .into_iter()
-        .map(GalleryImage::from)
-        .collect::<Vec<GalleryImage>>();
+        .map(GalleryImageWithPlace::from)
+        .collect::<Vec<GalleryImageWithPlace>>();
 
     return HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data });
+}
+
+#[derive(Deserialize, Debug, IntoParams)]
+struct GetMultiplePlacesImagesQuery {
+    #[serde(default = "default_offset")]
+    offset: u64,
+    #[serde(default = "default_limit")]
+    limit: u64,
+    place_ids: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMultiplePlacesImagesResponse {
+    pub images: Vec<GalleryImageWithPlace>,
+    #[serde(flatten)]
+    pub place_data: PlaceDataResponse,
+}
+
+#[tracing::instrument(skip(database))]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api", 
+    params(
+        GetMultiplePlacesImagesQuery
+    ),
+    responses(
+        (status = 200, description = "List images for multiple places", body = GetMultiplePlacesImagesResponse),
+        (status = 400, description = "Invalid place IDs format"),
+    )
+)]
+#[get("/places/images")]
+async fn get_multiple_places_images(
+    query_params: Query<GetMultiplePlacesImagesQuery>,
+    database: Data<Database>,
+) -> impl Responder {
+    tracing::info!("Getting multiple places images");
+    let GetMultiplePlacesImagesQuery {
+        offset,
+        limit,
+        place_ids,
+    } = query_params.into_inner();
+
+    tracing::info!(
+        "Request parameters - offset: {}, limit: {}, place_ids: {}",
+        offset,
+        limit,
+        place_ids
+    );
+
+    let place_ids: Vec<String> = place_ids.split(',').map(|s| s.trim().to_string()).collect();
+
+    if place_ids.is_empty() {
+        tracing::warn!("No place IDs provided in request");
+        return HttpResponse::BadRequest().json(ResponseError::new("no place IDs provided"));
+    }
+
+    tracing::info!("Parsed place IDs: {:?}", place_ids);
+
+    let Ok(images_count) = database.get_multiple_places_images_count(&place_ids).await else {
+        return HttpResponse::NotFound().json(ResponseError::new("places not found"));
+    };
+
+    let Ok(images) = database
+        .get_multiple_places_images(&place_ids, offset as i64, limit as i64)
+        .await
+    else {
+        return HttpResponse::NotFound().json(ResponseError::new("places not found"));
+    };
+
+    let place_data = PlaceDataResponse {
+        max_images: images_count,
+    };
+
+    let images = images
+        .into_iter()
+        .map(GalleryImageWithPlace::from)
+        .collect::<Vec<GalleryImageWithPlace>>();
+
+    tracing::info!(
+        "Returning response with {} images and max_images: {}",
+        images.len(),
+        images_count
+    );
+
+    HttpResponse::Ok().json(GetMultiplePlacesImagesResponse { images, place_data })
 }
