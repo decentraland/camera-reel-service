@@ -297,11 +297,10 @@ async fn test_get_multiple_places_images() {
     }
 
     // Test the new endpoint
-    let place_ids = format!("{},{}", place_id1, place_id2);
     let response = reqwest::Client::new()
         .get(&format!(
-            "http://{}/api/places/images?place_ids={}",
-            address, place_ids
+            "http://{}/api/places/images?place_ids={}&place_ids={}",
+            address, place_id1, place_id2
         ))
         .send()
         .await

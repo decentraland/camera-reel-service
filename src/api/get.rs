@@ -43,13 +43,15 @@ async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl 
             let image: Image = image.into();
             HttpResponse::Ok().json(image)
         }
-        Err(sqlx::Error::ColumnDecode { source, .. }) => {
-            tracing::debug!("Couldn't decode image metadata: {source:?}");
-            HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image"))
+        Err(sqlx::Error::ColumnDecode {
+            index: _,
+            source: _,
+        }) => HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image")),
+        Err(sqlx::Error::RowNotFound) => {
+            HttpResponse::NotFound().json(ResponseError::new("image not found"))
         }
         Err(e) => {
-            tracing::debug!("Image not found: {e:?}");
-            HttpResponse::NotFound().json(ResponseError::new("image not found"))
+            HttpResponse::NotFound().json(ResponseError::new(&format!("image not found: {e:?}")))
         }
     }
 }
@@ -286,7 +288,8 @@ struct GetMultiplePlacesImagesQuery {
     offset: u64,
     #[serde(default = "default_limit")]
     limit: u64,
-    place_ids: String,
+    #[serde(default)]
+    place_ids: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
@@ -314,28 +317,15 @@ async fn get_multiple_places_images(
     query_params: Query<GetMultiplePlacesImagesQuery>,
     database: Data<Database>,
 ) -> impl Responder {
-    tracing::info!("Getting multiple places images");
     let GetMultiplePlacesImagesQuery {
         offset,
         limit,
         place_ids,
     } = query_params.into_inner();
 
-    tracing::info!(
-        "Request parameters - offset: {}, limit: {}, place_ids: {}",
-        offset,
-        limit,
-        place_ids
-    );
-
-    let place_ids: Vec<String> = place_ids.split(',').map(|s| s.trim().to_string()).collect();
-
     if place_ids.is_empty() {
-        tracing::warn!("No place IDs provided in request");
         return HttpResponse::BadRequest().json(ResponseError::new("no place IDs provided"));
     }
-
-    tracing::info!("Parsed place IDs: {:?}", place_ids);
 
     let Ok(images_count) = database.get_multiple_places_images_count(&place_ids).await else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));
@@ -356,12 +346,6 @@ async fn get_multiple_places_images(
         .into_iter()
         .map(GalleryImageWithPlace::from)
         .collect::<Vec<GalleryImageWithPlace>>();
-
-    tracing::info!(
-        "Returning response with {} images and max_images: {}",
-        images.len(),
-        images_count
-    );
 
     HttpResponse::Ok().json(GetMultiplePlacesImagesResponse { images, place_data })
 }
