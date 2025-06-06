@@ -145,6 +145,9 @@ pub struct GetGalleryImagesResponse {
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
+    params(
+        GetImagesQuery
+    ),
     responses(
         (status = 200, description = "List images for a given user", body = GetImagesResponse),
         (status = 210, description = "List gallery images for a given user if `compact=true` (status code is 200, but was not possible to list multiple responses for one status code)", body = GetGalleryImagesResponse),
@@ -228,7 +231,7 @@ pub struct PlaceDataResponse {
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct GetPlaceImagesResponse {
-    pub images: Vec<GalleryImageWithPlace>,
+    pub images: Vec<GalleryImage>,
     #[serde(flatten)]
     pub place_data: PlaceDataResponse,
 }
@@ -271,8 +274,8 @@ async fn get_place_images(
 
     let images = images
         .into_iter()
-        .map(GalleryImageWithPlace::from)
-        .collect::<Vec<GalleryImageWithPlace>>();
+        .map(GalleryImage::from)
+        .collect::<Vec<GalleryImage>>();
 
     return HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data });
 }
