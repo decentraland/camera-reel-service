@@ -77,7 +77,7 @@ Those endpoints are:
 - GET `{server}/api/users/{address}/images` (if non authenticated, it will only return public images)
 - PATCH `{server}/api/images/{image_id}/visibility`
 - GET `{server}/api/places/{place_id}/images`
-- GET `{server}/api/places/images`
+- POST `{server}/api/places/images`
 
 There is an [upload example](examples/upload-image.rs), you can run it:
 

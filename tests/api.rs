@@ -294,11 +294,16 @@ async fn test_get_multiple_places_images() {
         .await;
     }
 
+    let request_body = serde_json::json!({
+        "placesIds": [place_id1, place_id2]
+    });
+
     let response = reqwest::Client::new()
-        .get(&format!(
-            "http://{}/api/places/images?place_ids={}&place_ids={}",
-            address, place_id1, place_id2
+        .post(&format!(
+            "http://{}/api/places/images?offset=0&limit=20",
+            address
         ))
+        .json(&request_body)
         .send()
         .await
         .unwrap()

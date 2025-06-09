@@ -1,6 +1,6 @@
 use actix_web::{
-    get,
-    web::{Data, Path, Redirect},
+    get, post,
+    web::{Data, Json, Path, Redirect},
     FromRequest, HttpRequest, HttpResponse, Responder,
 };
 use actix_web_lab::extract::Query;
@@ -286,8 +286,12 @@ struct GetMultiplePlacesImagesQuery {
     offset: u64,
     #[serde(default = "default_limit")]
     limit: u64,
-    #[serde(default)]
-    place_ids: Vec<String>,
+}
+
+#[derive(Deserialize, Debug, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetMultiplePlacesImagesBody {
+    pub places_ids: Vec<String>,
 }
 
 #[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
@@ -305,32 +309,31 @@ pub struct GetMultiplePlacesImagesResponse {
     params(
         GetMultiplePlacesImagesQuery
     ),
+    request_body(content = GetMultiplePlacesImagesBody, description = "Object with a list of places IDs", content_type = "application/json"),
     responses(
         (status = 200, description = "List images for multiple places", body = GetMultiplePlacesImagesResponse),
         (status = 400, description = "Invalid place IDs format"),
     )
 )]
-#[get("/places/images")]
+#[post("/places/images")]
 async fn get_multiple_places_images(
     query_params: Query<GetMultiplePlacesImagesQuery>,
+    request: Json<GetMultiplePlacesImagesBody>,
     database: Data<Database>,
 ) -> impl Responder {
-    let GetMultiplePlacesImagesQuery {
-        offset,
-        limit,
-        place_ids,
-    } = query_params.into_inner();
+    let GetMultiplePlacesImagesQuery { offset, limit } = query_params.into_inner();
+    let GetMultiplePlacesImagesBody { places_ids } = request.into_inner();
 
-    if place_ids.is_empty() {
+    if places_ids.is_empty() {
         return HttpResponse::BadRequest().json(ResponseError::new("no place IDs provided"));
     }
 
-    let Ok(images_count) = database.get_multiple_places_images_count(&place_ids).await else {
+    let Ok(images_count) = database.get_multiple_places_images_count(&places_ids).await else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));
     };
 
     let Ok(images) = database
-        .get_multiple_places_images(&place_ids, offset as i64, limit as i64)
+        .get_multiple_places_images(&places_ids, offset as i64, limit as i64)
         .await
     else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));

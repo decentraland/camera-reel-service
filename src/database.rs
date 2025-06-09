@@ -96,7 +96,7 @@ impl Database {
                 let uuid = parse_uuid(&filter_value[0])?.to_string();
                 query_builder.push_bind(uuid);
             }
-            "place_ids" => {
+            "places_ids" => {
                 query_builder.push("metadata->>'placeId' = ANY(");
                 query_builder.push_bind(filter_value);
                 query_builder.push(")");
@@ -193,11 +193,11 @@ impl Database {
 
     pub async fn get_multiple_places_images(
         &self,
-        place_ids: &[String],
+        places_ids: &[String],
         offset: i64,
         limit: i64,
     ) -> DBResult<Vec<DBImage>> {
-        self.get_images("place_ids", place_ids, offset, limit, true)
+        self.get_images("places_ids", places_ids, offset, limit, true)
             .await
     }
 
@@ -211,8 +211,8 @@ impl Database {
             .await
     }
 
-    pub async fn get_multiple_places_images_count(&self, place_ids: &[String]) -> DBResult<u64> {
-        self.get_images_count("place_ids", place_ids, true).await
+    pub async fn get_multiple_places_images_count(&self, places_ids: &[String]) -> DBResult<u64> {
+        self.get_images_count("places_ids", places_ids, true).await
     }
 
     pub async fn delete_image(&self, id: &str) -> DBResult<()> {

@@ -19,6 +19,7 @@ use utoipa_swagger_ui::SwaggerUi;
         get_user_data,
         get_user_images,
         get_place_images,
+        get_multiple_places_images,
         upload_image,
         update_image_visibility
     ),
@@ -36,6 +37,8 @@ use utoipa_swagger_ui::SwaggerUi;
             GetImagesResponse,
             GetGalleryImagesResponse,
             GetPlaceImagesResponse,
+            GetMultiplePlacesImagesBody,
+            GetMultiplePlacesImagesResponse,
             UserDataResponse,
             PlaceDataResponse,
             ResponseError,
