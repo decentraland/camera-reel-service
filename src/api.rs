@@ -8,7 +8,10 @@ use crate::database::DBImage;
 use self::{
     delete::delete_image,
     docs::generate_docs,
-    get::{get_image, get_metadata, get_place_images, get_user_data, get_user_images},
+    get::{
+        get_image, get_metadata, get_multiple_places_images, get_place_images, get_user_data,
+        get_user_images,
+    },
     update::update_image_visibility,
     upload::upload_image,
 };
@@ -41,6 +44,7 @@ pub fn services(config: &mut ServiceConfig) {
             .service(get_user_images)
             .service(get_user_data)
             .service(get_place_images)
+            .service(get_multiple_places_images)
             .wrap(cors),
     );
 }
@@ -63,6 +67,17 @@ pub struct GalleryImage {
     pub thumbnail_url: String,
     pub is_public: bool,
     pub date_time: String,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GalleryImageWithPlace {
+    pub id: String,
+    pub url: String,
+    pub thumbnail_url: String,
+    pub is_public: bool,
+    pub date_time: String,
+    pub place_id: String,
 }
 
 #[derive(Deserialize, Serialize, Debug, Default, Clone, ToSchema)]
@@ -121,6 +136,19 @@ impl From<DBImage> for GalleryImage {
             thumbnail_url: value.thumbnail_url,
             is_public: value.is_public,
             date_time: value.metadata.0.date_time,
+        }
+    }
+}
+
+impl From<DBImage> for GalleryImageWithPlace {
+    fn from(value: DBImage) -> Self {
+        Self {
+            id: value.id.to_string(),
+            url: value.url,
+            thumbnail_url: value.thumbnail_url,
+            is_public: value.is_public,
+            date_time: value.metadata.0.date_time,
+            place_id: value.metadata.0.place_id,
         }
     }
 }
