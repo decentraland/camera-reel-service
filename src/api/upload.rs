@@ -187,7 +187,7 @@ pub async fn upload_image(
     event_metadata.insert("realm".to_string(), serde_json::json!(metadata.realm));
     event_metadata.insert(
         "userAddress".to_string(),
-        serde_json::json!(metadata.user_address),
+        serde_json::json!(metadata.user_address.to_lowercase().to_string()),
     );
     event_metadata.insert("isPublic".to_string(), serde_json::json!(is_public));
     event_metadata.insert("photoId".to_string(), serde_json::json!(image_id));

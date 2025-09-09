@@ -73,6 +73,10 @@ pub async fn update_image_visibility(
     // Publish SNS event for privacy settings change
     let mut event_metadata = HashMap::new();
     event_metadata.insert("photoId".to_string(), serde_json::json!(image_id));
+    event_metadata.insert(
+        "userAddress".to_string(),
+        serde_json::json!(request_user_address.to_lowercase().to_string()),
+    );
     event_metadata.insert("isPublic".to_string(), serde_json::json!(update.is_public));
 
     let sns_event = Event {

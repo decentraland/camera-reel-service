@@ -33,11 +33,55 @@ async fn test_live() {
 
 #[actix_web::test]
 async fn test_upload_image() {
-    let (server, _) = create_test_server().await;
+    let (server, test_context) = create_test_server().await;
     let address = server.addr();
     let place_id = get_place_id();
 
-    upload_test_image("image.png", &address.to_string(), &place_id).await;
+    let image_id = upload_test_image("image.png", &address.to_string(), &place_id).await;
+
+    // Verify SNS event was published correctly (filter for photo-taken events)
+    let sns_message = poll_sqs_for_message_with_filter(
+        &test_context.sqs_client,
+        &test_context.queue_url,
+        10,
+        Some("photo-taken"),
+    )
+    .await;
+    assert!(
+        sns_message.is_some(),
+        "SNS message should have been received"
+    );
+
+    let message = sns_message.unwrap();
+
+    // Verify the event structure
+    assert_eq!(message["type"], "camera");
+    assert_eq!(message["subType"], "photo-taken");
+    assert_eq!(message["key"], format!("{}-image.png", image_id));
+
+    // Verify metadata
+    let metadata = &message["metadata"];
+    assert_eq!(metadata["photoId"], image_id);
+    assert_eq!(metadata["isPublic"], false); // upload_test_image creates private images
+    assert_eq!(
+        metadata["userAddress"],
+        "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5"
+    );
+    assert_eq!(metadata["realm"], "https://realm.org/v1");
+
+    // Verify timestamp is present and reasonable (within last 60 seconds)
+    let timestamp = message["timestamp"].as_u64().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert!(
+        timestamp <= now && timestamp >= now - 60,
+        "Timestamp should be recent"
+    );
+
+    // Verify users array exists (should be empty for default metadata)
+    assert!(metadata["users"].is_array());
 }
 
 #[actix_web::test]
@@ -259,6 +303,10 @@ async fn test_update_image_visibility() {
     let metadata = &message["metadata"];
     assert_eq!(metadata["photoId"], id);
     assert_eq!(metadata["isPublic"], false);
+    assert_eq!(
+        metadata["userAddress"],
+        "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5"
+    );
 
     // Verify timestamp is present and reasonable (within last 60 seconds)
     let timestamp = message["timestamp"].as_u64().unwrap();
