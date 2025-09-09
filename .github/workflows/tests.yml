@@ -13,25 +13,6 @@ jobs:
       AWS_SECRET_ACCESS_KEY: test
       AWS_DEFAULT_REGION: us-west-2
     services:
-      localstack:
-        image: localstack/localstack:latest
-        ports:
-          - 4566:4566
-        env:
-          SERVICES: sns,s3,sqs
-          DEBUG: 1
-          AWS_DEFAULT_REGION: us-west-2
-          AWS_ACCESS_KEY_ID: test
-          AWS_SECRET_ACCESS_KEY: test
-          LEGACY_DOCKER_CLIENT: 0
-          DOCKER_HOST: ""
-        options: >-
-          --health-cmd "curl -f http://localhost:4566/health"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
-          --health-start-period 10s
-          -v ${{ github.workspace }}/localstack:/etc/localstack/init/ready.d
       postgres:
         image: postgres
         env:
@@ -51,5 +32,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
+
+      - name: Start LocalStack
+        uses: LocalStack/setup-localstack@v0.2.2
+        with:
+          image-tag: "latest"
+          install-awslocal: "true"
+          configuration: DEBUG=1,SERVICES=sns,s3,sqs
+
+      - name: Setup AWS resources in LocalStack
+        run: |
+          # Create SNS topic
+          awslocal sns create-topic --name events --region us-west-2
+          # Create S3 bucket
+          awslocal s3 mb s3://camera-reel
+          awslocal s3api put-bucket-acl --bucket camera-reel --acl public-read
+
       - name: Run tests
         run: cargo test
