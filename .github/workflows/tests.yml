@@ -23,6 +23,8 @@ jobs:
           AWS_DEFAULT_REGION: us-west-2
           AWS_ACCESS_KEY_ID: test
           AWS_SECRET_ACCESS_KEY: test
+          LEGACY_DOCKER_CLIENT: 0
+          DOCKER_HOST: ""
         options: >-
           --health-cmd "curl -f http://localhost:4566/health"
           --health-interval 10s
