@@ -91,14 +91,14 @@ impl SNSPublisher {
                 "type",
                 sns::types::MessageAttributeValue::builder()
                     .data_type("String")
-                    .string_value(&event.event_type.to_string())
+                    .string_value(event.event_type.to_string())
                     .build()?,
             )
             .message_attributes(
                 "subType",
                 sns::types::MessageAttributeValue::builder()
                     .data_type("String")
-                    .string_value(&event.sub_type.to_string())
+                    .string_value(event.sub_type.to_string())
                     .build()?,
             )
             .send()
