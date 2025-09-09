@@ -6,15 +6,20 @@ use actix_web::{
     App,
 };
 use actix_web_lab::__reexports::serde_json;
+use aws_config::{BehaviorVersion, Region};
+use aws_sdk_sqs::{Client as SqsClient, Config as SqsConfig};
 use camera_reel_service::{
     api::{self, upload::UploadResponse, Metadata, ResponseError},
     database::{Database, DatabaseOptions},
-    live, Environment, Settings,
+    live,
+    sns::SNSPublisher,
+    Environment, Settings,
 };
 use dcl_crypto::Identity;
 use rand::{distributions::Alphanumeric, Rng};
 use s3::{
-    bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration, Region,
+    bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration,
+    Region as S3Region,
 };
 use sqlx::Executor;
 use tracing_subscriber::{prelude::__tracing_subscriber_SubscriberExt, util::SubscriberInitExt};
@@ -70,12 +75,12 @@ async fn create_db(test_database: &str) -> Database {
 }
 
 async fn create_bucket(bucket_name: &str) -> Bucket {
-    let region = Region::Custom {
-        region: "us-east-1".to_owned(),
-        endpoint: "http://localhost:9000".to_owned(),
+    let region = S3Region::Custom {
+        region: "us-west-2".to_owned(),
+        endpoint: "http://localhost:4566".to_owned(),
     };
     let credentials = Credentials::default().unwrap();
-    let config = BucketConfiguration::public();
+    let config = BucketConfiguration::default();
 
     let CreateBucketResponse { bucket, .. } =
         Bucket::create_with_path_style(bucket_name, region.clone(), credentials.clone(), config)
@@ -85,12 +90,121 @@ async fn create_bucket(bucket_name: &str) -> Bucket {
     bucket
 }
 
+async fn create_sqs_setup() -> (SqsClient, String) {
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new("us-west-2"))
+        .endpoint_url("http://localhost:4566")
+        .load()
+        .await;
+
+    let sqs_config = SqsConfig::builder()
+        .credentials_provider(config.credentials_provider().unwrap().clone())
+        .region(config.region().unwrap().clone())
+        .endpoint_url("http://localhost:4566")
+        .behavior_version(BehaviorVersion::latest())
+        .build();
+
+    let sqs_client = SqsClient::from_conf(sqs_config);
+
+    // Create a unique queue name for this test
+    let queue_name = format!("test-events-{}", create_string());
+
+    let create_queue_result = sqs_client
+        .create_queue()
+        .queue_name(&queue_name)
+        .send()
+        .await
+        .unwrap();
+
+    let queue_url = create_queue_result.queue_url().unwrap().to_string();
+
+    // Subscribe the queue to the SNS topic
+    subscribe_queue_to_sns(&sqs_client, &queue_url).await;
+
+    (sqs_client, queue_url)
+}
+
+async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String) {
+    use aws_sdk_sns::Client as SnsClient;
+
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new("us-west-2"))
+        .endpoint_url("http://localhost:4566")
+        .load()
+        .await;
+
+    let sns_config = aws_sdk_sns::Config::builder()
+        .credentials_provider(config.credentials_provider().unwrap().clone())
+        .region(config.region().unwrap().clone())
+        .endpoint_url("http://localhost:4566")
+        .behavior_version(BehaviorVersion::latest())
+        .build();
+
+    let sns_client = SnsClient::from_conf(sns_config);
+
+    // Get queue attributes to get the ARN
+    let queue_attrs = sqs_client
+        .get_queue_attributes()
+        .queue_url(queue_url)
+        .attribute_names(aws_sdk_sqs::types::QueueAttributeName::QueueArn)
+        .send()
+        .await
+        .unwrap();
+
+    let queue_arn = queue_attrs
+        .attributes()
+        .unwrap()
+        .get(&aws_sdk_sqs::types::QueueAttributeName::QueueArn)
+        .unwrap();
+
+    // Subscribe the queue to the SNS topic
+    sns_client
+        .subscribe()
+        .topic_arn("arn:aws:sns:us-west-2:000000000000:events")
+        .protocol("sqs")
+        .endpoint(queue_arn)
+        .send()
+        .await
+        .unwrap();
+
+    // Set queue policy to allow SNS to send messages
+    let policy = format!(
+        r#"{{
+            "Version": "2012-10-17",
+            "Statement": [
+                {{
+                    "Effect": "Allow",
+                    "Principal": "*",
+                    "Action": "sqs:SendMessage",
+                    "Resource": "{}",
+                    "Condition": {{
+                        "ArnEquals": {{
+                            "aws:SourceArn": "arn:aws:sns:us-west-2:000000000000:events"
+                        }}
+                    }}
+                }}
+            ]
+        }}"#,
+        queue_arn
+    );
+
+    sqs_client
+        .set_queue_attributes()
+        .queue_url(queue_url)
+        .attributes(aws_sdk_sqs::types::QueueAttributeName::Policy, policy)
+        .send()
+        .await
+        .unwrap();
+}
+
 fn create_settings(bucket_name: &str) -> Settings {
     Settings {
         port: 5000,
-        bucket_url: format!("http://127.0.0.1:9000/{bucket_name}"),
+        bucket_url: format!("http://localhost:4566/{bucket_name}"),
         api_url: "http://localhost:5000".to_owned(),
         max_images_per_user: 1000,
+        aws_sns_arn: "arn:aws:sns:us-west-2:000000000000:events".to_owned(),
+        aws_sns_endpoint: "http://localhost:4566".to_owned(),
         env: Environment::Dev,
     }
 }
@@ -99,17 +213,36 @@ pub struct TestContext {
     pub settings: Data<Settings>,
     pub database: Data<Database>,
     pub bucket: Data<Bucket>,
+    pub sns_publisher: Data<SNSPublisher>,
+    pub sqs_client: SqsClient,
+    pub queue_url: String,
 }
 
 pub async fn create_context() -> TestContext {
-    std::env::set_var("AWS_ACCESS_KEY_ID", "minioadmin");
-    std::env::set_var("AWS_SECRET_ACCESS_KEY", "minioadmin");
+    std::env::set_var("AWS_ACCESS_KEY_ID", "test");
+    std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
 
     let test_bucket = format!("camera-reel-{}", create_string());
+
+    // Create SNS publisher for tests
+    let sns_publisher = SNSPublisher::new(
+        "arn:aws:sns:us-west-2:000000000000:events".to_string(),
+        "http://localhost:4566".to_string(),
+        "us-west-2".to_string(),
+    )
+    .await
+    .unwrap();
+
+    // Create SQS client and queue for testing SNS messages
+    let (sqs_client, queue_url) = create_sqs_setup().await;
+
     TestContext {
         settings: Data::new(create_settings(&test_bucket)),
         database: Data::new(create_db(&test_bucket).await),
         bucket: Data::new(create_bucket(&test_bucket).await),
+        sns_publisher: Data::new(sns_publisher),
+        sqs_client,
+        queue_url,
     }
 }
 
@@ -122,18 +255,32 @@ fn initialize_tracing() {
         .try_init();
 }
 
-pub async fn create_test_server() -> TestServer {
+pub async fn create_test_server() -> (TestServer, TestContext) {
     initialize_tracing();
     let context = create_context().await;
 
-    actix_test::start(move || {
-        App::new()
-            .app_data(context.settings.clone())
-            .app_data(context.bucket.clone())
-            .app_data(context.database.clone())
-            .service(scope("/health").service(live))
-            .configure(api::services)
-    })
+    let server = actix_test::start({
+        let context_clone = TestContext {
+            settings: context.settings.clone(),
+            database: context.database.clone(),
+            bucket: context.bucket.clone(),
+            sns_publisher: context.sns_publisher.clone(),
+            sqs_client: context.sqs_client.clone(),
+            queue_url: context.queue_url.clone(),
+        };
+
+        move || {
+            App::new()
+                .app_data(context_clone.settings.clone())
+                .app_data(context_clone.bucket.clone())
+                .app_data(context_clone.database.clone())
+                .app_data(context_clone.sns_publisher.clone())
+                .service(scope("/health").service(live))
+                .configure(api::services)
+        }
+    });
+
+    (server, context)
 }
 
 async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id: &str) -> String {
@@ -149,6 +296,7 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id:
     let metadata = Metadata {
         user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
         place_id: place_id.to_string(),
+        realm: "https://realm.org/v1".to_string(),
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
@@ -280,4 +428,82 @@ pub fn get_signed_headers(
 
 pub fn get_place_id() -> String {
     "f888b899-c509-44d1-af21-717a4cef654e".to_string()
+}
+
+pub async fn poll_sqs_for_message_with_filter(
+    sqs_client: &SqsClient,
+    queue_url: &str,
+    timeout_seconds: u64,
+    filter_subtype: Option<&str>,
+) -> Option<serde_json::Value> {
+    use std::time::{Duration, Instant};
+    use tokio::time::sleep;
+
+    let start_time = Instant::now();
+    let timeout_duration = Duration::from_secs(timeout_seconds);
+
+    'outer: while start_time.elapsed() < timeout_duration {
+        let receive_result = sqs_client
+            .receive_message()
+            .queue_url(queue_url)
+            .max_number_of_messages(1)
+            .wait_time_seconds(1)
+            .send()
+            .await;
+
+        if let Ok(output) = receive_result {
+            let messages = output.messages();
+            if !messages.is_empty() {
+                let message = &messages[0];
+                if let Some(body) = message.body() {
+                    // Parse the SNS message wrapper
+                    if let Ok(sns_message) = serde_json::from_str::<serde_json::Value>(body) {
+                        // Extract the actual message from SNS wrapper
+                        if let Some(message_str) = sns_message.get("Message") {
+                            if let Some(message_text) = message_str.as_str() {
+                                if let Ok(actual_message) =
+                                    serde_json::from_str::<serde_json::Value>(message_text)
+                                {
+                                    // Check if we need to filter by subtype
+                                    if let Some(expected_subtype) = filter_subtype {
+                                        if let Some(subtype) = actual_message.get("subType") {
+                                            if subtype.as_str() != Some(expected_subtype) {
+                                                // Delete this message and continue looking
+                                                if let Some(receipt_handle) =
+                                                    message.receipt_handle()
+                                                {
+                                                    let _ = sqs_client
+                                                        .delete_message()
+                                                        .queue_url(queue_url)
+                                                        .receipt_handle(receipt_handle)
+                                                        .send()
+                                                        .await;
+                                                }
+                                                continue 'outer;
+                                            }
+                                        }
+                                    }
+
+                                    // Delete the message from the queue
+                                    if let Some(receipt_handle) = message.receipt_handle() {
+                                        let _ = sqs_client
+                                            .delete_message()
+                                            .queue_url(queue_url)
+                                            .receipt_handle(receipt_handle)
+                                            .send()
+                                            .await;
+                                    }
+                                    return Some(actual_message);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        sleep(Duration::from_millis(100)).await;
+    }
+
+    None
 }

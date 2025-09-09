@@ -1,19 +1,26 @@
-version: '3'
+version: "3.8"
 
 services:
-  minio:
-    image: minio/minio
+  localstack:
+    image: localstack/localstack:latest
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "4566:4566"
+    environment:
+      - SERVICES=sns,s3,sqs
+      - DEBUG=1
+      - DOCKER_HOST=unix:///var/run/docker.sock
+      - AWS_DEFAULT_REGION=us-west-2
+      - AWS_ACCESS_KEY_ID=test
+      - AWS_SECRET_ACCESS_KEY=test
     volumes:
-      - minio_storage:/data
-    command: server --console-address ":9001" /data
+      - ./localstack:/etc/localstack/init/ready.d
+      - /var/run/docker.sock:/var/run/docker.sock
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
-      interval: 30s
-      timeout: 20s
-      retries: 3
+      test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
 
   postgres:
     container_name: "camera_reel_db"
@@ -34,5 +41,4 @@ services:
       retries: 5
 
 volumes:
-  minio_storage: {}
   database_volume: {}

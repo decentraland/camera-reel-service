@@ -114,6 +114,8 @@ pub struct User {
     pub wearables: Vec<String>,
     #[serde(default)]
     pub is_guest: bool,
+    #[serde(default)]
+    pub is_emoting: Option<bool>,
 }
 
 impl From<DBImage> for Image {

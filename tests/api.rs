@@ -1,4 +1,3 @@
-use actix_test::TestServer;
 use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
     get::{
@@ -12,13 +11,15 @@ use common::upload_test_image;
 use common::{get_place_id, upload_public_test_image};
 use sqlx::types::Uuid;
 
-use crate::common::{create_test_identity, create_test_server, get_signed_headers};
+use crate::common::{
+    create_test_identity, create_test_server, get_signed_headers, poll_sqs_for_message_with_filter,
+};
 
 mod common;
 
 #[actix_web::test]
 async fn test_live() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
 
     let response = reqwest::Client::new()
@@ -32,7 +33,7 @@ async fn test_live() {
 
 #[actix_web::test]
 async fn test_upload_image() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let place_id = get_place_id();
 
@@ -41,7 +42,7 @@ async fn test_upload_image() {
 
 #[actix_web::test]
 async fn test_upload_failing_image() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
 
     let response = upload_test_failing_image("any/image.png", &address.to_string()).await;
@@ -50,7 +51,7 @@ async fn test_upload_failing_image() {
 
 #[actix_web::test]
 async fn test_get_multiple_images() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
     let place_id = get_place_id();
@@ -82,7 +83,7 @@ async fn test_get_multiple_images() {
 
 #[actix_web::test]
 async fn test_get_multiple_only_public_images() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let not_my_user_address = "0x6949f9f239d1a0816ce5eb364a1f588ae9cc1bf4".to_string();
     let place_id = get_place_id();
@@ -114,7 +115,7 @@ async fn test_get_multiple_only_public_images() {
 
 #[actix_web::test]
 async fn test_get_multiple_images_compact() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let user_address = "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string();
     let place_id = get_place_id();
@@ -146,7 +147,7 @@ async fn test_get_multiple_images_compact() {
 
 #[actix_web::test]
 async fn test_delete_image() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let place_id = Uuid::new_v4().to_string();
 
@@ -189,13 +190,13 @@ async fn test_delete_image() {
 
 #[actix_web::test]
 async fn test_update_image_visibility() {
-    let server: TestServer = create_test_server().await;
+    let (server, test_context) = create_test_server().await;
     let address = server.addr();
     let place_id = Uuid::new_v4().to_string();
 
     let id = upload_public_test_image("image.png", &address.to_string(), &place_id).await;
 
-    // Initial visibility is private by default
+    // Initial visibility is public (as uploaded with upload_public_test_image)
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
@@ -206,7 +207,7 @@ async fn test_update_image_visibility() {
     let image = response.json::<Image>().await.unwrap();
     assert_eq!(image.is_public, true);
 
-    // Update visibility to public
+    // Update visibility to private
     let identity = create_test_identity();
     let path = &format!("/api/images/{}/visibility", id);
     let headers = get_signed_headers(identity, "patch", path, "");
@@ -233,11 +234,47 @@ async fn test_update_image_visibility() {
     assert!(response.status().is_success());
     let image = response.json::<Image>().await.unwrap();
     assert_eq!(image.is_public, false);
+
+    // Verify SNS event was published correctly (filter for photo-privacy-changed events)
+    let sns_message = poll_sqs_for_message_with_filter(
+        &test_context.sqs_client,
+        &test_context.queue_url,
+        10,
+        Some("photo-privacy-changed"),
+    )
+    .await;
+    assert!(
+        sns_message.is_some(),
+        "SNS message should have been received"
+    );
+
+    let message = sns_message.unwrap();
+
+    // Verify the event structure
+    assert_eq!(message["type"], "camera");
+    assert_eq!(message["subType"], "photo-privacy-changed");
+    assert_eq!(message["key"], id);
+
+    // Verify metadata
+    let metadata = &message["metadata"];
+    assert_eq!(metadata["photoId"], id);
+    assert_eq!(metadata["isPublic"], false);
+
+    // Verify timestamp is present and reasonable (within last 60 seconds)
+    let timestamp = message["timestamp"].as_u64().unwrap();
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs();
+    assert!(
+        timestamp <= now && timestamp >= now - 60,
+        "Timestamp should be recent"
+    );
 }
 
 #[actix_web::test]
 async fn test_get_multiple_images_by_place() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
     let place_id = get_place_id();
 
@@ -273,7 +310,7 @@ async fn test_get_multiple_images_by_place() {
 
 #[actix_web::test]
 async fn test_get_multiple_places_images() {
-    let server = create_test_server().await;
+    let (server, _) = create_test_server().await;
     let address = server.addr();
 
     let place_id1 = get_place_id();

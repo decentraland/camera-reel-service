@@ -9,18 +9,32 @@ jobs:
   validations:
     runs-on: ubuntu-latest
     env:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-west-2
     services:
-      minio:
-        image: fclairamb/minio-github-actions
+      localstack:
+        image: localstack/localstack:latest
         ports:
-          - 9000:9000
+          - 4566:4566
+        env:
+          SERVICES: sns,s3,sqs
+          DEBUG: 1
+          AWS_DEFAULT_REGION: us-west-2
+          AWS_ACCESS_KEY_ID: test
+          AWS_SECRET_ACCESS_KEY: test
+        options: >-
+          --health-cmd "curl -f http://localhost:4566/health"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 10s
+          -v ${{ github.workspace }}/localstack:/etc/localstack/init/ready.d
       postgres:
         image: postgres
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: camera_reel 
+          POSTGRES_DB: camera_reel
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -35,6 +49,5 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Run tests 
+      - name: Run tests
         run: cargo test
-
