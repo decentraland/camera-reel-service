@@ -90,7 +90,38 @@ async fn create_bucket(bucket_name: &str) -> Bucket {
     bucket
 }
 
-async fn create_sqs_setup() -> (SqsClient, String) {
+async fn create_sns_topic() -> String {
+    use aws_sdk_sns::Client as SnsClient;
+
+    let config = aws_config::defaults(BehaviorVersion::latest())
+        .region(Region::new("us-west-2"))
+        .endpoint_url("http://localhost:4566")
+        .load()
+        .await;
+
+    let sns_config = aws_sdk_sns::Config::builder()
+        .credentials_provider(config.credentials_provider().unwrap().clone())
+        .region(config.region().unwrap().clone())
+        .endpoint_url("http://localhost:4566")
+        .behavior_version(BehaviorVersion::latest())
+        .build();
+
+    let sns_client = SnsClient::from_conf(sns_config);
+
+    // Create a unique topic name for this test
+    let topic_name = format!("test-events-{}", create_string());
+
+    let create_topic_result = sns_client
+        .create_topic()
+        .name(&topic_name)
+        .send()
+        .await
+        .unwrap();
+
+    create_topic_result.topic_arn().unwrap().to_string()
+}
+
+async fn create_sqs_setup(topic_arn: &str) -> (SqsClient, String) {
     let config = aws_config::defaults(BehaviorVersion::latest())
         .region(Region::new("us-west-2"))
         .endpoint_url("http://localhost:4566")
@@ -119,12 +150,12 @@ async fn create_sqs_setup() -> (SqsClient, String) {
     let queue_url = create_queue_result.queue_url().unwrap().to_string();
 
     // Subscribe the queue to the SNS topic
-    subscribe_queue_to_sns(&sqs_client, &queue_url).await;
+    subscribe_queue_to_sns(&sqs_client, &queue_url, topic_arn).await;
 
     (sqs_client, queue_url)
 }
 
-async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String) {
+async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String, topic_arn: &str) {
     use aws_sdk_sns::Client as SnsClient;
 
     let config = aws_config::defaults(BehaviorVersion::latest())
@@ -160,7 +191,7 @@ async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String) {
     // Subscribe the queue to the SNS topic
     sns_client
         .subscribe()
-        .topic_arn("arn:aws:sns:us-west-2:000000000000:events")
+        .topic_arn(topic_arn)
         .protocol("sqs")
         .endpoint(queue_arn)
         .send()
@@ -179,13 +210,13 @@ async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String) {
                     "Resource": "{}",
                     "Condition": {{
                         "ArnEquals": {{
-                            "aws:SourceArn": "arn:aws:sns:us-west-2:000000000000:events"
+                            "aws:SourceArn": "{}"
                         }}
                     }}
                 }}
             ]
         }}"#,
-        queue_arn
+        queue_arn, topic_arn
     );
 
     sqs_client
@@ -197,13 +228,13 @@ async fn subscribe_queue_to_sns(sqs_client: &SqsClient, queue_url: &String) {
         .unwrap();
 }
 
-fn create_settings(bucket_name: &str) -> Settings {
+fn create_settings(bucket_name: &str, topic_arn: &str) -> Settings {
     Settings {
         port: 5000,
         bucket_url: format!("http://localhost:4566/{bucket_name}"),
         api_url: "http://localhost:5000".to_owned(),
         max_images_per_user: 1000,
-        aws_sns_arn: "arn:aws:sns:us-west-2:000000000000:events".to_owned(),
+        aws_sns_arn: topic_arn.to_owned(),
         aws_sns_endpoint: "http://localhost:4566".to_owned(),
         env: Environment::Dev,
     }
@@ -216,6 +247,7 @@ pub struct TestContext {
     pub sns_publisher: Data<SNSPublisher>,
     pub sqs_client: SqsClient,
     pub queue_url: String,
+    pub topic_arn: String,
 }
 
 pub async fn create_context() -> TestContext {
@@ -224,9 +256,12 @@ pub async fn create_context() -> TestContext {
 
     let test_bucket = format!("camera-reel-{}", create_string());
 
+    // Create unique SNS topic for this test
+    let topic_arn = create_sns_topic().await;
+
     // Create SNS publisher for tests
     let sns_publisher = SNSPublisher::new(
-        "arn:aws:sns:us-west-2:000000000000:events".to_string(),
+        topic_arn.clone(),
         "http://localhost:4566".to_string(),
         "us-west-2".to_string(),
     )
@@ -234,15 +269,16 @@ pub async fn create_context() -> TestContext {
     .unwrap();
 
     // Create SQS client and queue for testing SNS messages
-    let (sqs_client, queue_url) = create_sqs_setup().await;
+    let (sqs_client, queue_url) = create_sqs_setup(&topic_arn).await;
 
     TestContext {
-        settings: Data::new(create_settings(&test_bucket)),
+        settings: Data::new(create_settings(&test_bucket, &topic_arn)),
         database: Data::new(create_db(&test_bucket).await),
         bucket: Data::new(create_bucket(&test_bucket).await),
         sns_publisher: Data::new(sns_publisher),
         sqs_client,
         queue_url,
+        topic_arn,
     }
 }
 
@@ -267,6 +303,7 @@ pub async fn create_test_server() -> (TestServer, TestContext) {
             sns_publisher: context.sns_publisher.clone(),
             sqs_client: context.sqs_client.clone(),
             queue_url: context.queue_url.clone(),
+            topic_arn: context.topic_arn.clone(),
         };
 
         move || {
