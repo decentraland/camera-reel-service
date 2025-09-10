@@ -9,18 +9,15 @@ jobs:
   validations:
     runs-on: ubuntu-latest
     env:
-      AWS_ACCESS_KEY_ID: minioadmin
-      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-west-2
     services:
-      minio:
-        image: fclairamb/minio-github-actions
-        ports:
-          - 9000:9000
       postgres:
         image: postgres
         env:
           POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: camera_reel 
+          POSTGRES_DB: camera_reel
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -35,6 +32,21 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           cache-on-failure: true
-      - name: Run tests 
-        run: cargo test
 
+      - name: Start LocalStack
+        uses: LocalStack/setup-localstack@v0.2.2
+        with:
+          image-tag: "latest"
+          install-awslocal: "true"
+          configuration: DEBUG=1,SERVICES=sns,s3,sqs
+
+      - name: Setup AWS resources in LocalStack
+        run: |
+          # Create SNS topic
+          awslocal sns create-topic --name events --region us-west-2
+          # Create S3 bucket
+          awslocal s3 mb s3://camera-reel
+          awslocal s3api put-bucket-acl --bucket camera-reel --acl public-read
+
+      - name: Run tests
+        run: cargo test

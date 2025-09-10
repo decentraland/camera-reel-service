@@ -6,15 +6,17 @@ use actix_web_lab::__reexports::serde_json;
 use image::guess_format;
 use s3::Bucket;
 use serde::{Deserialize, Serialize};
-use sqlx::types::Uuid;
+use sqlx::types::{chrono, Uuid};
 use utoipa::ToSchema;
 
 use crate::{
     api::Image,
     api::{auth::AuthUser, get::UserDataResponse, ForbiddenError, Metadata, ResponseError},
     database::Database,
+    sns::{Event, EventSubtype, EventType, SNSPublisher},
     Settings,
 };
+use std::collections::HashMap;
 
 #[derive(MultipartForm, Debug, ToSchema)]
 pub struct Upload {
@@ -34,7 +36,7 @@ pub struct UploadResponse {
     pub user_data: UserDataResponse,
 }
 
-#[tracing::instrument(skip(upload, bucket, database, settings))]
+#[tracing::instrument(skip(upload, bucket, database, settings, sns_publisher))]
 #[utoipa::path(
     tag = "images",
     context_path = "/api", 
@@ -52,6 +54,7 @@ pub async fn upload_image(
     bucket: Data<Bucket>,
     database: Data<Database>,
     settings: Data<Settings>,
+    sns_publisher: Data<SNSPublisher>,
     upload: MultipartForm<Upload>,
 ) -> impl Responder {
     let images_count = database
@@ -174,6 +177,46 @@ pub async fn upload_image(
         return HttpResponse::InternalServerError()
             .json(ResponseError::new("failed to store image metadata"));
     };
+
+    // Publish SNS event
+    let mut event_metadata = HashMap::new();
+    event_metadata.insert(
+        "sceneId".to_string(),
+        serde_json::json!(metadata.scene.name),
+    );
+    event_metadata.insert("realm".to_string(), serde_json::json!(metadata.realm));
+    event_metadata.insert(
+        "userAddress".to_string(),
+        serde_json::json!(metadata.user_address.to_lowercase().to_string()),
+    );
+    event_metadata.insert("isPublic".to_string(), serde_json::json!(is_public));
+    event_metadata.insert("photoId".to_string(), serde_json::json!(image_id));
+
+    // Convert visible_people to the required format
+    let users: Vec<serde_json::Value> = metadata
+        .visible_people
+        .iter()
+        .map(|user| {
+            serde_json::json!({
+                "address": user.user_address,
+                "isEmoting": user.is_emoting.unwrap_or(false)
+            })
+        })
+        .collect();
+    event_metadata.insert("users".to_string(), serde_json::json!(users));
+
+    let sns_event = Event {
+        event_type: EventType::Camera,
+        sub_type: EventSubtype::PhotoTaken,
+        key: image_name.clone(),
+        timestamp: chrono::Utc::now().timestamp() as u64,
+        metadata: event_metadata,
+    };
+
+    if let Err(error) = sns_publisher.publish(&sns_event).await {
+        tracing::error!("failed to publish SNS event: {}", error);
+        // Don't return error here as the image was successfully uploaded
+    }
 
     let user_data = UserDataResponse {
         current_images: images_count + 1,
