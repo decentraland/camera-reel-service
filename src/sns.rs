@@ -58,14 +58,10 @@ impl SNSPublisher {
         region: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Load AWS config with specified region
-        let mut config_builder =
-            aws_config::defaults(BehaviorVersion::latest()).region(Region::new(region));
-
-        if let Some(ref endpoint_url) = endpoint {
-            config_builder = config_builder.endpoint_url(endpoint_url);
-        }
-
-        let config = config_builder.load().await;
+        let config = aws_config::defaults(BehaviorVersion::latest())
+            .region(Region::new(region))
+            .load()
+            .await;
 
         let mut sns_config_builder = Config::builder()
             .credentials_provider(config.credentials_provider().unwrap().clone())
