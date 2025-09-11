@@ -235,7 +235,7 @@ fn create_settings(bucket_name: &str, topic_arn: &str) -> Settings {
         api_url: "http://localhost:5000".to_owned(),
         max_images_per_user: 1000,
         aws_sns_arn: topic_arn.to_owned(),
-        aws_sns_endpoint: "http://localhost:4566".to_owned(),
+        aws_sns_endpoint: Some("http://localhost:4566".to_owned()),
         env: Environment::Dev,
     }
 }
@@ -262,7 +262,7 @@ pub async fn create_context() -> TestContext {
     // Create SNS publisher for tests
     let sns_publisher = SNSPublisher::new(
         topic_arn.clone(),
-        "http://localhost:4566".to_string(),
+        Some("http://localhost:4566".to_string()),
         "us-west-2".to_string(),
     )
     .await

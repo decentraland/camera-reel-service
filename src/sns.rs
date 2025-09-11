@@ -54,22 +54,29 @@ pub struct SNSPublisher {
 impl SNSPublisher {
     pub async fn new(
         topic_arn: String,
-        endpoint: String,
+        endpoint: Option<String>,
         region: String,
     ) -> Result<Self, Box<dyn std::error::Error>> {
         // Load AWS config with specified region
-        let config = aws_config::defaults(BehaviorVersion::latest())
-            .region(Region::new(region))
-            .endpoint_url(&endpoint)
-            .load()
-            .await;
+        let mut config_builder =
+            aws_config::defaults(BehaviorVersion::latest()).region(Region::new(region));
 
-        let sns_config = Config::builder()
+        if let Some(ref endpoint_url) = endpoint {
+            config_builder = config_builder.endpoint_url(endpoint_url);
+        }
+
+        let config = config_builder.load().await;
+
+        let mut sns_config_builder = Config::builder()
             .credentials_provider(config.credentials_provider().unwrap().clone())
             .region(config.region().unwrap().clone())
-            .endpoint_url(endpoint)
-            .behavior_version(BehaviorVersion::latest())
-            .build();
+            .behavior_version(BehaviorVersion::latest());
+
+        if let Some(endpoint_url) = endpoint {
+            sns_config_builder = sns_config_builder.endpoint_url(endpoint_url);
+        }
+
+        let sns_config = sns_config_builder.build();
 
         let client = Client::from_conf(sns_config);
 

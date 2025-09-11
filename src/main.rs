@@ -30,8 +30,8 @@ pub struct Arguments {
     #[clap(long, env, default_value_t = String::from("arn:aws:sns:us-east-1:000000000000:events"))]
     aws_sns_arn: String,
 
-    #[clap(long, env, default_value_t = String::from("http://localhost:4566"))]
-    aws_sns_endpoint: String,
+    #[clap(long, env)]
+    aws_sns_endpoint: Option<String>,
 }
 
 #[actix_web::main]
