@@ -33,7 +33,7 @@ pub struct Settings {
     pub max_images_per_user: u64,
     pub env: Environment,
     pub aws_sns_arn: String,
-    pub aws_sns_endpoint: String,
+    pub aws_sns_endpoint: Option<String>,
 }
 
 pub struct Context {
