@@ -17,7 +17,12 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM gcr.io/distroless/cc-debian11 AS runtime
+FROM debian:12-slim AS runtime
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
 ARG PROJECT
 COPY --from=builder /app/target/release/camera-reel-service /usr/local/bin/camera-reel-service
 
