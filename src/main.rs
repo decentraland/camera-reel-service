@@ -40,6 +40,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let database = Database::from_url(&args.database_url).await?;
 
+    println!("Connected to the database");
+
     let aws_region = args.aws_region.clone();
     let region = if args.s3_url == LOCAL_S3 {
         std::env::set_var("AWS_ACCESS_KEY_ID", "test");
@@ -80,10 +82,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         aws_sns_arn: args.aws_sns_arn.clone(),
         aws_sns_endpoint: args.aws_sns_endpoint.clone(),
     };
+    println!("Starting camera-reel-service");
 
     // Create SNS Publisher
     let sns_publisher =
         SNSPublisher::new(args.aws_sns_arn, args.aws_sns_endpoint, aws_region).await?;
+
+    println!("SNS Publisher created");
 
     let context = Context {
         settings,
