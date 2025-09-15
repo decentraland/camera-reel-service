@@ -63,12 +63,27 @@ impl SNSPublisher {
             .load()
             .await;
 
+        // Log credentials provider status
+        if config.credentials_provider().is_none() {
+            tracing::error!("No credentials provider available for SNS client");
+            return Err("No credentials provider available".into());
+        }
+
+        if config.region().is_none() {
+            tracing::error!("No AWS region configured for SNS client");
+            return Err("No AWS region configured".into());
+        }
+
+        tracing::info!("AWS credentials provider: available");
+        tracing::info!("AWS region: {:?}", config.region());
+
         let mut sns_config_builder = Config::builder()
             .credentials_provider(config.credentials_provider().unwrap().clone())
             .region(config.region().unwrap().clone())
             .behavior_version(BehaviorVersion::latest());
 
         if let Some(endpoint_url) = endpoint {
+            tracing::info!("Using custom SNS endpoint: {}", endpoint_url);
             sns_config_builder = sns_config_builder.endpoint_url(endpoint_url);
         }
 

@@ -57,7 +57,7 @@ async fn test_upload_image() {
     // Verify the event structure
     assert_eq!(message["type"], "camera");
     assert_eq!(message["subType"], "photo-taken");
-    assert_eq!(message["key"], format!("{}-image.png", image_id));
+    assert_eq!(message["key"], image_id);
 
     // Verify metadata
     let metadata = &message["metadata"];
