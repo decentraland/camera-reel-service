@@ -208,7 +208,7 @@ pub async fn upload_image(
     let sns_event = Event {
         event_type: EventType::Camera,
         sub_type: EventSubtype::PhotoTaken,
-        key: image_name.clone(),
+        key: image_id.clone(),
         timestamp: chrono::Utc::now().timestamp() as u64,
         metadata: event_metadata,
     };
