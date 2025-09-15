@@ -32,6 +32,12 @@ pub struct Arguments {
 
     #[clap(long, env)]
     aws_sns_endpoint: Option<String>,
+
+    #[clap(long, env, default_value_t = String::from("test"))]
+    s3_access_key_id: String,
+
+    #[clap(long, env, default_value_t = String::from("test"))]
+    s3_secret_access_key: String,
 }
 
 #[actix_web::main]
@@ -43,27 +49,31 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("Connected to the database");
 
     let aws_region = args.aws_region.clone();
-    let region = if args.s3_url == LOCAL_S3 {
-        std::env::set_var("AWS_ACCESS_KEY_ID", "test");
-        std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
 
+    // Use S3 credentials from arguments (defaults to "test" if not provided)
+    let s3_access_key = &args.s3_access_key_id;
+    let s3_secret_key = &args.s3_secret_access_key;
+
+    let (region, s3_credentials) = if args.s3_url == LOCAL_S3 {
         let region = Region::Custom {
             region: args.aws_region,
             endpoint: args.s3_url.to_owned(),
         };
         args.s3_url = format!("{}/{}", args.s3_url, args.s3_bucket_name);
-        region
+
+        let credentials =
+            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+
+        (region, credentials)
     } else {
-        args.aws_region.parse()?
+        let region = args.aws_region.parse()?;
+        let credentials =
+            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+
+        (region, credentials)
     };
 
-    let bucket = Bucket::new(
-        &args.s3_bucket_name,
-        region,
-        // Loads credentials from ENV variables
-        Credentials::default()?,
-    )?
-    .with_path_style();
+    let bucket = Bucket::new(&args.s3_bucket_name, region, s3_credentials)?.with_path_style();
 
     let s3_url = if !args.s3_url.ends_with('/') {
         args.s3_url.to_string()
