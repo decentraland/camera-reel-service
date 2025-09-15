@@ -65,17 +65,17 @@ impl SNSPublisher {
 
         // Log credentials provider status
         if config.credentials_provider().is_none() {
-            tracing::error!("No credentials provider available for SNS client");
-            return Err("No credentials provider available".into());
+            println!("SNS: No credentials provider available for SNS client");
+            return Err("SNS: No credentials provider available".into());
         }
 
         if config.region().is_none() {
-            tracing::error!("No AWS region configured for SNS client");
-            return Err("No AWS region configured".into());
+            println!("SNS: No AWS region configured for SNS client");
+            return Err("SNS: No AWS region configured".into());
         }
 
-        tracing::info!("AWS credentials provider: available");
-        tracing::info!("AWS region: {:?}", config.region());
+        println!("SNS: AWS credentials provider: available");
+        println!("SNS: AWS region: {:?}", config.region());
 
         let mut sns_config_builder = Config::builder()
             .credentials_provider(config.credentials_provider().unwrap().clone())
@@ -83,13 +83,34 @@ impl SNSPublisher {
             .behavior_version(BehaviorVersion::latest());
 
         if let Some(endpoint_url) = endpoint {
-            tracing::info!("Using custom SNS endpoint: {}", endpoint_url);
+            println!("SNS: Using custom SNS endpoint: {}", endpoint_url);
             sns_config_builder = sns_config_builder.endpoint_url(endpoint_url);
         }
 
         let sns_config = sns_config_builder.build();
 
         let client = Client::from_conf(sns_config);
+
+        // Test the client configuration by attempting to get topic attributes
+        match client
+            .get_topic_attributes()
+            .topic_arn(&topic_arn)
+            .send()
+            .await
+        {
+            Ok(_) => {
+                println!("SNS: client successfully initialized and verified topic access");
+            }
+            Err(e) => {
+                println!(
+                    "SNS: Failed to verify SNS topic access during initialization: {}",
+                    e
+                );
+                println!("SNS: This may indicate IAM permission issues or invalid topic ARN");
+                // Don't fail initialization here, as some environments might restrict GetTopicAttributes
+                // but still allow Publish
+            }
+        }
 
         Ok(SNSPublisher { client, topic_arn })
     }
