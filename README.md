@@ -95,7 +95,7 @@ Here is a highlevel architecture overview that can help to understand the projec
 
 ![Camera Reel service architecture](docs/architecture.svg)
 
-## 🤖 AI Agent Context
+## AI Agent Context
 
 **Service Purpose:** Manages camera images captured from Decentraland Explorer. Provides upload, storage, retrieval, and metadata management for user-generated screenshots with visibility controls (public/private) and place associations.
 
