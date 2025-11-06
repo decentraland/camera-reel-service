@@ -191,6 +191,7 @@ pub async fn upload_image(
     );
     event_metadata.insert("isPublic".to_string(), serde_json::json!(is_public));
     event_metadata.insert("photoId".to_string(), serde_json::json!(image_id));
+    event_metadata.insert("placeId".to_string(), serde_json::json!(metadata.place_id));
 
     // Convert visible_people to the required format
     let users: Vec<serde_json::Value> = metadata
