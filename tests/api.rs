@@ -68,6 +68,7 @@ async fn test_upload_image() {
         "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5"
     );
     assert_eq!(metadata["realm"], "https://realm.org/v1");
+    assert_eq!(metadata["placeId"], place_id);
 
     // Verify timestamp is present and reasonable (within last 60 seconds)
     let timestamp = message["timestamp"].as_u64().unwrap();
