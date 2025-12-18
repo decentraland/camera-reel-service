@@ -9,17 +9,17 @@ This server interacts with PostgreSQL for image metadata storage, AWS S3 or MinI
 ## Table of Contents
 
 - [Features](#features)
-- [Dependencies & Related Services](#dependencies--related-services)
+- [Dependencies](#dependencies)
 - [API Documentation](#api-documentation)
-- [Database Schema](#database-schema)
+- [Database](#database)
+  - [Schema](#schema)
+  - [Migrations](#migrations)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
   - [Installation](#installation)
   - [Configuration](#configuration)
   - [Running the Service](#running-the-service)
 - [Testing](#testing)
-- [How to Contribute](#how-to-contribute)
-- [License](#license)
 
 ## Features
 
@@ -30,14 +30,9 @@ This server interacts with PostgreSQL for image metadata storage, AWS S3 or MinI
 - **Image Management**: Support image deletion and metadata updates
 - **OpenAPI Documentation**: Auto-generated API documentation via utoipa crate
 
-## Dependencies & Related Services
-
-This service interacts with the following services:
+## Dependencies
 
 - **[Decentraland Explorer](https://github.com/decentraland/explorer)**: Client application that captures and uploads images
-
-External dependencies:
-
 - **PostgreSQL**: Database for image metadata, user associations, and place mappings
 - **AWS S3 or MinIO**: Object storage for actual image file storage
 - **AWS SNS**: Event notifications for image uploads and updates
@@ -69,9 +64,37 @@ There is an [upload example](examples/upload-image.rs) that demonstrates how to 
 cargo run --example upload-image
 ```
 
-## Database Schema
+## Database
+
+### Schema
 
 See [docs/database-schemas.md](docs/database-schemas.md) for detailed schema, column definitions, and relationships.
+
+### Migrations
+
+The service uses SQLX CLI for database migrations. These migrations are located in `migrations/`.
+
+To manage database migrations, follow SQLX CLI instructions: [SQLX CLI Documentation](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md)
+
+#### Create a new migration
+
+```bash
+sqlx migrate add name-of-the-migration
+```
+
+#### Manually applying migrations
+
+To run migrations:
+
+```bash
+sqlx migrate run
+```
+
+To rollback migrations:
+
+```bash
+sqlx migrate revert
+```
 
 ## Getting Started
 
@@ -103,17 +126,13 @@ cargo build
 
 ### Configuration
 
-The service uses environment variables for configuration. Create a `.env` file in the root directory containing the environment variables for the service to run.
+The service uses environment variables for configuration. Copy the example file and adjust as needed:
 
-Key configuration variables include:
+```bash
+cp .env.example .env
+```
 
-- `DATABASE_URL`: PostgreSQL connection string
-- `AWS_S3_BUCKET` or `MINIO_BUCKET`: Storage bucket name
-- `AWS_S3_ENDPOINT` or `MINIO_ENDPOINT`: Storage endpoint URL
-- `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`: Storage credentials
-- `AWS_SNS_ARN`: SNS topic ARN for event notifications (optional)
-- `PORT`: Server port (default: 8080)
-- `RUST_LOG`: Log level (e.g., `debug`, `info`, `warn`, `error`)
+See `.env.example` for available configuration options.
 
 ### Running the Service
 
@@ -187,10 +206,6 @@ cargo test -- --nocapture
 - **Integration Tests**: Test the complete request/response cycle
 
 For detailed testing guidelines and standards, refer to our [Testing Standards](https://github.com/decentraland/docs/tree/main/development-standards/testing-standards) documentation.
-
-## Database Migrations
-
-To manage database migrations, follow SQLX CLI instructions: [SQLX CLI Documentation](https://github.com/launchbadge/sqlx/blob/main/sqlx-cli/README.md)
 
 ## Architecture
 
