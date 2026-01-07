@@ -25,7 +25,7 @@ This server interacts with PostgreSQL for image metadata storage, AWS S3 or MinI
 
 - **Image Upload**: Upload and store camera images captured from Decentraland Explorer with metadata (coordinates, scene, timestamp, visibility)
 - **Visibility Management**: Control image visibility settings (public/private) per user
-- **Place Associations**: Associate images with places (parcels/scenes) for discovery
+- **Place Associations**: Associate images with places (scenes) for discovery
 - **User Galleries**: Provide user galleries and place-based image collections
 - **Image Management**: Support image deletion and metadata updates
 - **OpenAPI Documentation**: Auto-generated API documentation via utoipa crate
