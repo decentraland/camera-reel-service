@@ -12,6 +12,7 @@ use camera_reel_service::{
     api::{self, upload::UploadResponse, Metadata, ResponseError},
     database::{Database, DatabaseOptions},
     live,
+    places_client::PlacesClient,
     sns::SNSPublisher,
     Environment, Settings,
 };
@@ -237,6 +238,9 @@ fn create_settings(bucket_name: &str, topic_arn: &str) -> Settings {
         aws_sns_arn: topic_arn.to_owned(),
         aws_sns_endpoint: Some("http://localhost:4566".to_owned()),
         env: Environment::Dev,
+        places_api_url: "https://places.decentraland.org".to_owned(),
+        places_cache_ttl_seconds: 300,
+        places_cache_max_size: 1000,
     }
 }
 
@@ -245,12 +249,17 @@ pub struct TestContext {
     pub database: Data<Database>,
     pub bucket: Data<Bucket>,
     pub sns_publisher: Data<SNSPublisher>,
+    pub places_client: Data<PlacesClient>,
     pub sqs_client: SqsClient,
     pub queue_url: String,
     pub topic_arn: String,
 }
 
 pub async fn create_context() -> TestContext {
+    create_context_with_places_url("https://places.decentraland.org").await
+}
+
+pub async fn create_context_with_places_url(places_url: &str) -> TestContext {
     std::env::set_var("AWS_ACCESS_KEY_ID", "test");
     std::env::set_var("AWS_SECRET_ACCESS_KEY", "test");
 
@@ -271,11 +280,21 @@ pub async fn create_context() -> TestContext {
     // Create SQS client and queue for testing SNS messages
     let (sqs_client, queue_url) = create_sqs_setup(&topic_arn).await;
 
+    let mut settings = create_settings(&test_bucket, &topic_arn);
+    settings.places_api_url = places_url.to_string();
+
+    let places_client = PlacesClient::new(
+        settings.places_api_url.clone(),
+        settings.places_cache_ttl_seconds,
+        settings.places_cache_max_size,
+    );
+
     TestContext {
-        settings: Data::new(create_settings(&test_bucket, &topic_arn)),
+        settings: Data::new(settings),
         database: Data::new(create_db(&test_bucket).await),
         bucket: Data::new(create_bucket(&test_bucket).await),
         sns_publisher: Data::new(sns_publisher),
+        places_client: Data::new(places_client),
         sqs_client,
         queue_url,
         topic_arn,
@@ -291,9 +310,9 @@ fn initialize_tracing() {
         .try_init();
 }
 
-pub async fn create_test_server() -> (TestServer, TestContext) {
+pub async fn create_test_server_with_places_url(places_url: &str) -> (TestServer, TestContext) {
     initialize_tracing();
-    let context = create_context().await;
+    let context = create_context_with_places_url(places_url).await;
 
     let server = actix_test::start({
         let context_clone = TestContext {
@@ -301,6 +320,7 @@ pub async fn create_test_server() -> (TestServer, TestContext) {
             database: context.database.clone(),
             bucket: context.bucket.clone(),
             sns_publisher: context.sns_publisher.clone(),
+            places_client: context.places_client.clone(),
             sqs_client: context.sqs_client.clone(),
             queue_url: context.queue_url.clone(),
             topic_arn: context.topic_arn.clone(),
@@ -312,6 +332,38 @@ pub async fn create_test_server() -> (TestServer, TestContext) {
                 .app_data(context_clone.bucket.clone())
                 .app_data(context_clone.database.clone())
                 .app_data(context_clone.sns_publisher.clone())
+                .app_data(context_clone.places_client.clone())
+                .service(scope("/health").service(live))
+                .configure(api::services)
+        }
+    });
+
+    (server, context)
+}
+
+pub async fn create_test_server() -> (TestServer, TestContext) {
+    initialize_tracing();
+    let context = create_context().await;
+
+    let server = actix_test::start({
+        let context_clone = TestContext {
+            settings: context.settings.clone(),
+            database: context.database.clone(),
+            bucket: context.bucket.clone(),
+            sns_publisher: context.sns_publisher.clone(),
+            places_client: context.places_client.clone(),
+            sqs_client: context.sqs_client.clone(),
+            queue_url: context.queue_url.clone(),
+            topic_arn: context.topic_arn.clone(),
+        };
+
+        move || {
+            App::new()
+                .app_data(context_clone.settings.clone())
+                .app_data(context_clone.bucket.clone())
+                .app_data(context_clone.database.clone())
+                .app_data(context_clone.sns_publisher.clone())
+                .app_data(context_clone.places_client.clone())
                 .service(scope("/health").service(live))
                 .configure(api::services)
         }

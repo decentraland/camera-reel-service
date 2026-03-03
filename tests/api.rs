@@ -4,15 +4,18 @@ use camera_reel_service::api::{
         GetGalleryImagesResponse, GetImagesResponse, GetMultiplePlacesImagesResponse,
         GetPlaceImagesResponse, UserDataResponse,
     },
-    Image,
+    Image, ResponseError,
 };
 use common::upload_test_failing_image;
 use common::upload_test_image;
 use common::{get_place_id, upload_public_test_image};
 use sqlx::types::Uuid;
+use wiremock::matchers::{method, path, query_param};
+use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::common::{
-    create_test_identity, create_test_server, get_signed_headers, poll_sqs_for_message_with_filter,
+    create_test_identity, create_test_server, create_test_server_with_places_url,
+    get_signed_headers, poll_sqs_for_message_with_filter,
 };
 
 mod common;
@@ -399,4 +402,218 @@ async fn test_get_multiple_places_images() {
 
     assert_eq!(response.place_data.max_images, 6);
     assert_eq!(response.images.len(), 6);
+}
+
+fn places_response(total: usize, ids: Vec<&str>) -> serde_json::Value {
+    serde_json::json!({
+        "ok": true,
+        "total": total,
+        "data": ids.into_iter().map(|id| serde_json::json!({"id": id})).collect::<Vec<_>>()
+    })
+}
+
+#[actix_web::test]
+async fn test_get_place_images_with_eth_world_name() {
+    let mock_server = MockServer::start().await;
+
+    let place_id_1 = Uuid::new_v4().to_string();
+    let place_id_2 = Uuid::new_v4().to_string();
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "test-world.eth"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(places_response(
+            2,
+            vec![place_id_1.as_str(), place_id_2.as_str()],
+        )))
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    // Upload 3 images to place_id_1
+    for i in 0..3 {
+        upload_public_test_image(
+            &format!("eth-p1-{i}.png"),
+            &address.to_string(),
+            &place_id_1,
+        )
+        .await;
+    }
+
+    // Upload 2 images to place_id_2
+    for i in 0..2 {
+        upload_public_test_image(
+            &format!("eth-p2-{i}.png"),
+            &address.to_string(),
+            &place_id_2,
+        )
+        .await;
+    }
+
+    let response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/test-world.eth/images",
+            address
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<GetPlaceImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(response.place_data.max_images, 5);
+    assert_eq!(response.images.len(), 5);
+}
+
+#[actix_web::test]
+async fn test_get_place_images_eth_empty_places() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "empty-world.eth"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(places_response(0, vec![])),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    let response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/empty-world.eth/images",
+            address
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+
+    let body = response.json::<GetPlaceImagesResponse>().await.unwrap();
+    assert_eq!(body.images.len(), 0);
+    assert_eq!(body.place_data.max_images, 0);
+}
+
+#[actix_web::test]
+async fn test_get_place_images_eth_api_error() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    let response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/error-world.eth/images",
+            address
+        ))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 502);
+
+    let body = response.json::<ResponseError>().await.unwrap();
+    assert!(body.get_message().contains("failed to resolve world name"));
+}
+
+#[actix_web::test]
+async fn test_get_place_images_eth_with_pagination_params() {
+    let mock_server = MockServer::start().await;
+
+    let place_id = Uuid::new_v4().to_string();
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "paginated-world.eth"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(places_response(1, vec![place_id.as_str()])),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    // Upload 5 public images
+    for i in 0..5 {
+        upload_public_test_image(
+            &format!("eth-pg-{i}.png"),
+            &address.to_string(),
+            &place_id,
+        )
+        .await;
+    }
+
+    // Request with offset=2&limit=2
+    let response = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/paginated-world.eth/images?offset=2&limit=2",
+            address
+        ))
+        .send()
+        .await
+        .unwrap()
+        .json::<GetPlaceImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(response.images.len(), 2);
+    assert_eq!(response.place_data.max_images, 5);
+}
+
+#[actix_web::test]
+async fn test_get_place_images_eth_caches_resolution() {
+    let mock_server = MockServer::start().await;
+
+    let place_id = Uuid::new_v4().to_string();
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "cache-test.eth"))
+        .respond_with(
+            ResponseTemplate::new(200)
+                .set_body_json(places_response(1, vec![place_id.as_str()])),
+        )
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    // First request
+    let response1 = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/cache-test.eth/images",
+            address
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert!(response1.status().is_success());
+
+    // Second request — should use cache, mock expects exactly 1 hit
+    let response2 = reqwest::Client::new()
+        .get(&format!(
+            "http://{}/api/places/cache-test.eth/images",
+            address
+        ))
+        .send()
+        .await
+        .unwrap();
+    assert!(response2.status().is_success());
+    // wiremock .expect(1) will panic on drop if more than 1 request was made
 }

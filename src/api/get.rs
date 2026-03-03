@@ -10,6 +10,7 @@ use utoipa::{IntoParams, ToSchema};
 use crate::{
     api::{auth::AuthUser, GalleryImage, GalleryImageWithPlace, Image, ResponseError},
     database::Database,
+    places_client::PlacesClient,
     Settings,
 };
 
@@ -236,16 +237,17 @@ pub struct GetPlaceImagesResponse {
     pub place_data: PlaceDataResponse,
 }
 
-#[tracing::instrument(skip(database))]
+#[tracing::instrument(skip(database, places_client))]
 #[utoipa::path(
     tag = "images",
-    context_path = "/api", 
+    context_path = "/api",
     params(
         GetPlaceImagesQuery
     ),
     responses(
         (status = 200, description = "List images for a given place", body = GetPlaceImagesResponse),
-        (status = 404, description = "Not found")
+        (status = 404, description = "Not found"),
+        (status = 502, description = "Failed to resolve world name")
     )
 )]
 #[get("/places/{place_id}/images")]
@@ -254,8 +256,51 @@ async fn get_place_images(
     query_params: Query<GetPlaceImagesQuery>,
     request: HttpRequest,
     database: Data<Database>,
+    places_client: Data<PlacesClient>,
 ) -> impl Responder {
+    let place_id = place_id.into_inner();
     let GetPlaceImagesQuery { offset, limit } = query_params.into_inner();
+
+    if place_id.ends_with(".eth") {
+        let place_ids = match places_client.get_world_place_ids(&place_id).await {
+            Ok(ids) => ids,
+            Err(e) => {
+                tracing::error!("Failed to resolve world name '{}': {}", place_id, e);
+                return HttpResponse::BadGateway()
+                    .json(ResponseError::new(&format!("failed to resolve world name: {e}")));
+            }
+        };
+
+        if place_ids.is_empty() {
+            let place_data = PlaceDataResponse { max_images: 0 };
+            return HttpResponse::Ok().json(GetPlaceImagesResponse {
+                images: vec![],
+                place_data,
+            });
+        }
+
+        let Ok(images_count) = database.get_multiple_places_images_count(&place_ids).await else {
+            return HttpResponse::NotFound().json(ResponseError::new("place not found"));
+        };
+
+        let Ok(images) = database
+            .get_multiple_places_images(&place_ids, offset as i64, limit as i64)
+            .await
+        else {
+            return HttpResponse::NotFound().json(ResponseError::new("place not found"));
+        };
+
+        let place_data = PlaceDataResponse {
+            max_images: images_count,
+        };
+
+        let images = images
+            .into_iter()
+            .map(GalleryImage::from)
+            .collect::<Vec<GalleryImage>>();
+
+        return HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data });
+    }
 
     let Ok(images_count) = database.get_place_images_count(&place_id).await else {
         return HttpResponse::NotFound().json(ResponseError::new("place not found"));
@@ -277,7 +322,7 @@ async fn get_place_images(
         .map(GalleryImage::from)
         .collect::<Vec<GalleryImage>>();
 
-    return HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data });
+    HttpResponse::Ok().json(GetPlaceImagesResponse { images, place_data })
 }
 
 #[derive(Deserialize, Debug, IntoParams)]

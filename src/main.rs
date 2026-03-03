@@ -1,3 +1,4 @@
+use camera_reel_service::places_client::PlacesClient;
 use camera_reel_service::sns::SNSPublisher;
 use camera_reel_service::{database::Database, run, Context, Environment, Settings};
 use clap::Parser;
@@ -38,6 +39,15 @@ pub struct Arguments {
 
     #[clap(long, env, default_value_t = String::from("test"))]
     s3_secret_access_key: String,
+
+    #[clap(long, env, default_value_t = String::from("https://places.decentraland.org"))]
+    places_api_url: String,
+
+    #[clap(long, env, default_value_t = 300)]
+    places_cache_ttl_seconds: u64,
+
+    #[clap(long, env, default_value_t = 1000)]
+    places_cache_max_size: u64,
 }
 
 #[actix_web::main]
@@ -91,6 +101,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         env: read_env(),
         aws_sns_arn: args.aws_sns_arn.clone(),
         aws_sns_endpoint: args.aws_sns_endpoint.clone(),
+        places_api_url: args.places_api_url.clone(),
+        places_cache_ttl_seconds: args.places_cache_ttl_seconds,
+        places_cache_max_size: args.places_cache_max_size,
     };
     println!("Starting camera-reel-service");
 
@@ -100,11 +113,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     println!("SNS Publisher created");
 
+    let places_client = PlacesClient::new(
+        args.places_api_url,
+        args.places_cache_ttl_seconds,
+        args.places_cache_max_size,
+    );
+
     let context = Context {
         settings,
         database,
         bucket,
         sns_publisher,
+        places_client,
     };
 
     Ok(run(context).await.map_err(|e| {
