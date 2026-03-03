@@ -13,10 +13,12 @@ use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 use tracing_tree::HierarchicalLayer;
 
 use crate::api::middlewares;
+use crate::places_client::PlacesClient;
 use crate::sns::SNSPublisher;
 
 pub mod api;
 pub mod database;
+pub mod places_client;
 pub mod sns;
 
 #[derive(Debug)]
@@ -34,6 +36,9 @@ pub struct Settings {
     pub env: Environment,
     pub aws_sns_arn: String,
     pub aws_sns_endpoint: Option<String>,
+    pub places_api_url: String,
+    pub places_cache_ttl_seconds: u64,
+    pub places_cache_max_size: u64,
 }
 
 pub struct Context {
@@ -41,6 +46,7 @@ pub struct Context {
     pub database: Database,
     pub bucket: Bucket,
     pub sns_publisher: SNSPublisher,
+    pub places_client: PlacesClient,
 }
 
 pub async fn run(context: Context) -> std::io::Result<()> {
@@ -52,6 +58,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
     let bucket = Data::new(context.bucket);
     let database = Data::new(context.database);
     let sns_publisher = Data::new(context.sns_publisher);
+    let places_client = Data::new(context.places_client);
 
     let http_metrics_collector = Data::new(HttpMetricsCollectorBuilder::default().build());
     let metrics_token = std::env::var("WKC_METRICS_BEARER_TOKEN").unwrap_or("".to_string());
@@ -70,6 +77,7 @@ pub async fn run(context: Context) -> std::io::Result<()> {
             .app_data(bucket.clone())
             .app_data(database.clone())
             .app_data(sns_publisher.clone())
+            .app_data(places_client.clone())
             .app_data(http_metrics_collector.clone())
             .service(scope("/health").wrap(health_cors).service(live))
             .configure(api::services)
