@@ -347,10 +347,10 @@ pub struct GetMultiplePlacesImagesResponse {
     pub place_data: PlaceDataResponse,
 }
 
-#[tracing::instrument(skip(database))]
+#[tracing::instrument(skip(database, places_client))]
 #[utoipa::path(
     tag = "images",
-    context_path = "/api", 
+    context_path = "/api",
     params(
         GetMultiplePlacesImagesQuery
     ),
@@ -358,6 +358,7 @@ pub struct GetMultiplePlacesImagesResponse {
     responses(
         (status = 200, description = "List images for multiple places", body = GetMultiplePlacesImagesResponse),
         (status = 400, description = "Invalid place IDs format"),
+        (status = 502, description = "Failed to resolve world name"),
     )
 )]
 #[post("/places/images")]
@@ -365,6 +366,7 @@ async fn get_multiple_places_images(
     query_params: Query<GetMultiplePlacesImagesQuery>,
     request: Json<GetMultiplePlacesImagesBody>,
     database: Data<Database>,
+    places_client: Data<PlacesClient>,
 ) -> impl Responder {
     let GetMultiplePlacesImagesQuery { offset, limit } = query_params.into_inner();
     let GetMultiplePlacesImagesBody { places_ids } = request.into_inner();
@@ -373,12 +375,36 @@ async fn get_multiple_places_images(
         return HttpResponse::BadRequest().json(ResponseError::new("no place IDs provided"));
     }
 
-    let Ok(images_count) = database.get_multiple_places_images_count(&places_ids).await else {
+    let mut resolved_ids: Vec<String> = Vec::new();
+    for id in places_ids {
+        if id.ends_with(".eth") {
+            match places_client.get_world_place_ids(&id).await {
+                Ok(ids) => resolved_ids.extend(ids),
+                Err(e) => {
+                    tracing::error!("Failed to resolve world name '{}': {}", id, e);
+                    return HttpResponse::BadGateway()
+                        .json(ResponseError::new(&format!("failed to resolve world name: {e}")));
+                }
+            }
+        } else {
+            resolved_ids.push(id);
+        }
+    }
+
+    if resolved_ids.is_empty() {
+        let place_data = PlaceDataResponse { max_images: 0 };
+        return HttpResponse::Ok().json(GetMultiplePlacesImagesResponse {
+            images: vec![],
+            place_data,
+        });
+    }
+
+    let Ok(images_count) = database.get_multiple_places_images_count(&resolved_ids).await else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));
     };
 
     let Ok(images) = database
-        .get_multiple_places_images(&places_ids, offset as i64, limit as i64)
+        .get_multiple_places_images(&resolved_ids, offset as i64, limit as i64)
         .await
     else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));

@@ -39,6 +39,8 @@ jobs:
           image-tag: "latest"
           install-awslocal: "true"
           configuration: DEBUG=1,SERVICES=sns,s3,sqs
+        env:
+          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Setup AWS resources in LocalStack
         run: |
