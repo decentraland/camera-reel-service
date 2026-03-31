@@ -617,3 +617,141 @@ async fn test_get_place_images_eth_caches_resolution() {
     assert!(response2.status().is_success());
     // wiremock .expect(1) will panic on drop if more than 1 request was made
 }
+
+#[actix_web::test]
+async fn test_post_multiple_places_images_with_eth_world_name() {
+    let mock_server = MockServer::start().await;
+
+    let world_place_id_1 = Uuid::new_v4().to_string();
+    let world_place_id_2 = Uuid::new_v4().to_string();
+    let regular_place_id = Uuid::new_v4().to_string();
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "multi-world.eth"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(places_response(
+            2,
+            vec![world_place_id_1.as_str(), world_place_id_2.as_str()],
+        )))
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    // Upload 2 images to world scene 1
+    for i in 0..2 {
+        upload_public_test_image(
+            &format!("mw-p1-{i}.png"),
+            &address.to_string(),
+            &world_place_id_1,
+        )
+        .await;
+    }
+
+    // Upload 3 images to world scene 2
+    for i in 0..3 {
+        upload_public_test_image(
+            &format!("mw-p2-{i}.png"),
+            &address.to_string(),
+            &world_place_id_2,
+        )
+        .await;
+    }
+
+    // Upload 1 image to regular place
+    upload_public_test_image("mw-rp-0.png", &address.to_string(), &regular_place_id).await;
+
+    let request_body = serde_json::json!({
+        "placesIds": [regular_place_id, "multi-world.eth"]
+    });
+
+    let response = reqwest::Client::new()
+        .post(&format!(
+            "http://{}/api/places/images?offset=0&limit=20",
+            address
+        ))
+        .json(&request_body)
+        .send()
+        .await
+        .unwrap()
+        .json::<GetMultiplePlacesImagesResponse>()
+        .await
+        .unwrap();
+
+    assert_eq!(response.place_data.max_images, 6);
+    assert_eq!(response.images.len(), 6);
+}
+
+#[actix_web::test]
+async fn test_post_multiple_places_images_eth_empty_world() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .and(query_param("names", "empty-multi.eth"))
+        .respond_with(
+            ResponseTemplate::new(200).set_body_json(places_response(0, vec![])),
+        )
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    let request_body = serde_json::json!({
+        "placesIds": ["empty-multi.eth"]
+    });
+
+    let response = reqwest::Client::new()
+        .post(&format!(
+            "http://{}/api/places/images?offset=0&limit=20",
+            address
+        ))
+        .json(&request_body)
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+
+    let body = response
+        .json::<GetMultiplePlacesImagesResponse>()
+        .await
+        .unwrap();
+    assert_eq!(body.images.len(), 0);
+    assert_eq!(body.place_data.max_images, 0);
+}
+
+#[actix_web::test]
+async fn test_post_multiple_places_images_eth_api_error() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/api/places"))
+        .respond_with(ResponseTemplate::new(500))
+        .mount(&mock_server)
+        .await;
+
+    let (server, _) = create_test_server_with_places_url(&mock_server.uri()).await;
+    let address = server.addr();
+
+    let request_body = serde_json::json!({
+        "placesIds": ["error-multi.eth"]
+    });
+
+    let response = reqwest::Client::new()
+        .post(&format!(
+            "http://{}/api/places/images?offset=0&limit=20",
+            address
+        ))
+        .json(&request_body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 502);
+
+    let body = response.json::<ResponseError>().await.unwrap();
+    assert!(body.get_message().contains("failed to resolve world name"));
+}
