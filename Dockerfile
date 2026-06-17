@@ -16,13 +16,13 @@ COPY . .
 RUN cargo build --release
 
 FROM debian:13-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
     libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
 # Run as an unprivileged user
-RUN useradd --system --no-create-home --uid 10001 appuser
+RUN useradd --system --no-create-home --no-log-init --uid 10001 appuser
 
 COPY --from=builder /app/target/release/camera-reel-service /usr/local/bin/camera-reel-service
 
