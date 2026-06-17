@@ -14,7 +14,7 @@ jobs:
       AWS_DEFAULT_REGION: us-west-2
     services:
       postgres:
-        image: postgres
+        image: postgres:latest@sha256:29ee7bb30d804447dc9a91fd0d74322ae1dc3a4072cc6346f70a5ed6e783b565
         env:
           POSTGRES_PASSWORD: postgres
           POSTGRES_DB: camera_reel
@@ -35,7 +35,7 @@ jobs:
 
       - name: Start moto (AWS mock)
         run: |
-          docker run -d --name moto -p 4566:5000 motoserver/moto:5.2.2
+          docker run -d --name moto -p 4566:5000 motoserver/moto:5.2.2@sha256:d8ae5edc2bf080e7e4c13f9bd4b29b53ac3b4427e92956318db3dbe23ec43eb7
           for i in $(seq 1 30); do
             curl -sf http://localhost:4566/moto-api/ >/dev/null && { echo "moto is ready"; break; }
             sleep 1
