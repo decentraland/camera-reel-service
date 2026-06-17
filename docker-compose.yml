@@ -1,11 +1,13 @@
-version: "3.8"
-
 services:
   localstack:
-    image: localstack/localstack:latest
+    # Pinned to a Community (free) 3.x image. This service only needs sns/s3/sqs, which
+    # are all Community features. The `latest` (4.x) image hard-requires a valid Pro
+    # license. Switch to a newer tag / `latest` only if you have an active Pro license.
+    image: localstack/localstack:3.8
     ports:
       - "4566:4566"
     environment:
+      # Only consumed by Pro images; ignored by the Community image above.
       # Provided via the host environment or a local .env file (never commit the value).
       - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
       - SERVICES=sns,s3,sqs
