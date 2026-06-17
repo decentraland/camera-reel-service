@@ -14,8 +14,8 @@ use wiremock::matchers::{method, path, query_param};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
 use crate::common::{
-    create_test_identity, create_test_server, create_test_server_with_places_url,
-    get_signed_headers, poll_sqs_for_message_with_filter,
+    create_other_identity, create_test_identity, create_test_server,
+    create_test_server_with_places_url, get_signed_headers, poll_sqs_for_message_with_filter,
 };
 
 mod common;
@@ -404,6 +404,31 @@ async fn test_get_private_image_metadata_as_owner_succeeds() {
     assert!(response.status().is_success());
     let image = response.json::<Image>().await.unwrap();
     assert_eq!(image.is_public, false);
+}
+
+#[actix_web::test]
+async fn test_get_private_image_metadata_as_non_owner_is_forbidden() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let place_id = get_place_id();
+
+    let id = upload_test_image("private-other.png", &address.to_string(), &place_id).await;
+
+    // A different authenticated user must not read someone else's private metadata.
+    let path = format!("/api/images/{id}/metadata");
+    let headers = get_signed_headers(create_other_identity(), "get", &path, "");
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}{}", address, path))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 403);
 }
 
 #[actix_web::test]
