@@ -200,8 +200,17 @@ async fn test_delete_image() {
     let place_id = Uuid::new_v4().to_string();
 
     let id = upload_test_image("image.png", &address.to_string(), &place_id).await;
+
+    // The image is private, so its owner must authenticate to read the metadata.
+    let metadata_path = format!("/api/images/{id}/metadata");
+    let metadata_headers = get_signed_headers(create_test_identity(), "get", &metadata_path, "");
     let response = reqwest::Client::new()
-        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .get(&format!("http://{}{}", address, metadata_path))
+        .header(metadata_headers[0].0.clone(), metadata_headers[0].1.clone())
+        .header(metadata_headers[1].0.clone(), metadata_headers[1].1.clone())
+        .header(metadata_headers[2].0.clone(), metadata_headers[2].1.clone())
+        .header(metadata_headers[3].0.clone(), metadata_headers[3].1.clone())
+        .header(metadata_headers[4].0.clone(), metadata_headers[4].1.clone())
         .send()
         .await
         .unwrap();
@@ -273,9 +282,17 @@ async fn test_update_image_visibility() {
         .unwrap();
     assert!(response.status().is_success());
 
-    // Check if visibility was updated
+    // Check if visibility was updated. The image is now private, so the owner must
+    // authenticate to read its metadata.
+    let metadata_path = format!("/api/images/{id}/metadata");
+    let metadata_headers = get_signed_headers(create_test_identity(), "get", &metadata_path, "");
     let response = reqwest::Client::new()
-        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .get(&format!("http://{}{}", address, metadata_path))
+        .header(metadata_headers[0].0.clone(), metadata_headers[0].1.clone())
+        .header(metadata_headers[1].0.clone(), metadata_headers[1].1.clone())
+        .header(metadata_headers[2].0.clone(), metadata_headers[2].1.clone())
+        .header(metadata_headers[3].0.clone(), metadata_headers[3].1.clone())
+        .header(metadata_headers[4].0.clone(), metadata_headers[4].1.clone())
         .send()
         .await
         .unwrap();
@@ -322,6 +339,92 @@ async fn test_update_image_visibility() {
         timestamp <= now && timestamp >= now - 60,
         "Timestamp should be recent"
     );
+}
+
+#[actix_web::test]
+async fn test_get_public_image_metadata_without_auth_succeeds() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let place_id = get_place_id();
+
+    let id = upload_public_test_image("public-meta.png", &address.to_string(), &place_id).await;
+
+    // Public images expose their metadata to anyone, no auth required.
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, true);
+}
+
+#[actix_web::test]
+async fn test_get_private_image_metadata_without_auth_is_unauthorized() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let place_id = get_place_id();
+
+    let id = upload_test_image("private-noauth.png", &address.to_string(), &place_id).await;
+
+    // Private image metadata must not be served to unauthenticated callers.
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 401);
+}
+
+#[actix_web::test]
+async fn test_get_private_image_metadata_as_owner_succeeds() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let place_id = get_place_id();
+
+    let id = upload_test_image("private-owner.png", &address.to_string(), &place_id).await;
+
+    // The owner can read their own private image metadata when authenticated.
+    let path = format!("/api/images/{id}/metadata");
+    let headers = get_signed_headers(create_test_identity(), "get", &path, "");
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}{}", address, path))
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, false);
+}
+
+#[actix_web::test]
+async fn test_post_multiple_places_images_too_many_ids() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+
+    // 101 IDs exceeds the cap and must be rejected before any DB work.
+    let places_ids: Vec<String> = (0..101).map(|_| Uuid::new_v4().to_string()).collect();
+    let request_body = serde_json::json!({ "placesIds": places_ids });
+
+    let response = reqwest::Client::new()
+        .post(&format!("http://{}/api/places/images", address))
+        .json(&request_body)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), 400);
+    let body = response.json::<ResponseError>().await.unwrap();
+    assert!(body.get_message().contains("too many place IDs"));
 }
 
 #[actix_web::test]

@@ -14,6 +14,15 @@ use crate::{
     Settings,
 };
 
+/// Maximum number of place IDs accepted in a single `POST /places/images` request.
+/// Bounds the fan-out work (per-id world-name resolution + DB query size) so a single
+/// request can't exhaust server resources.
+const MAX_PLACES_IDS: usize = 100;
+
+/// Upper bound for the client-supplied pagination `limit`. Values above this are clamped
+/// so a request can't drive an oversized DB query / response.
+const MAX_LIMIT: u64 = 100;
+
 #[tracing::instrument(skip(settings))]
 #[utoipa::path(
     tag = "images",
@@ -30,29 +39,51 @@ async fn get_image(settings: Data<Settings>, image_id: Path<String>) -> impl Res
 #[tracing::instrument(skip(database))]
 #[utoipa::path(
     tag = "images",
-    context_path = "/api", 
+    context_path = "/api",
     responses(
         (status = 200, description = "Get image metadata", body = Image),
+        (status = 401, description = "Unauthorized"),
+        (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found")
     )
 )]
 #[get("/images/{image_id}/metadata")]
-async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl Responder {
+async fn get_metadata(
+    database: Data<Database>,
+    image_id: Path<String>,
+    request: HttpRequest,
+) -> impl Responder {
     let image_id = image_id.into_inner();
-    match database.get_image(&image_id).await {
-        Ok(image) => {
-            let image: Image = image.into();
-            HttpResponse::Ok().json(image)
-        }
+    let image = match database.get_image(&image_id).await {
+        Ok(image) => image,
         Err(sqlx::Error::ColumnDecode { source, .. }) => {
             tracing::debug!("Couldn't decode image metadata: {source:?}");
-            HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image"))
+            return HttpResponse::InternalServerError()
+                .json(ResponseError::new("couldn't decode image"));
         }
         Err(e) => {
             tracing::debug!("Image not found: {e:?}");
-            HttpResponse::NotFound().json(ResponseError::new("image not found"))
+            return HttpResponse::NotFound().json(ResponseError::new("image not found"));
+        }
+    };
+
+    // Private images expose sensitive metadata (visible people, scene location, realm,
+    // owner address), so they must only be served to their owner. Public images stay open.
+    if !image.is_public {
+        match AuthUser::extract(&request).await {
+            Ok(AuthUser { address }) => {
+                if !image.user_address.eq_ignore_ascii_case(&address) {
+                    return HttpResponse::Forbidden().json(ResponseError::new("forbidden"));
+                }
+            }
+            Err(_) => {
+                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
+            }
         }
     }
+
+    let image: Image = image.into();
+    HttpResponse::Ok().json(image)
 }
 
 #[derive(Deserialize, Debug, IntoParams)]
@@ -178,6 +209,7 @@ async fn get_user_images(
         limit,
         compact,
     } = query_params.into_inner();
+    let limit = limit.min(MAX_LIMIT);
 
     let Ok(images_count) = database
         .get_user_images_count(&user_address, only_public_images)
@@ -260,6 +292,7 @@ async fn get_place_images(
 ) -> impl Responder {
     let place_id = place_id.into_inner();
     let GetPlaceImagesQuery { offset, limit } = query_params.into_inner();
+    let limit = limit.min(MAX_LIMIT);
 
     if place_id.ends_with(".eth") {
         let place_ids = match places_client.get_world_place_ids(&place_id).await {
@@ -369,10 +402,17 @@ async fn get_multiple_places_images(
     places_client: Data<PlacesClient>,
 ) -> impl Responder {
     let GetMultiplePlacesImagesQuery { offset, limit } = query_params.into_inner();
+    let limit = limit.min(MAX_LIMIT);
     let GetMultiplePlacesImagesBody { places_ids } = request.into_inner();
 
     if places_ids.is_empty() {
         return HttpResponse::BadRequest().json(ResponseError::new("no place IDs provided"));
+    }
+
+    if places_ids.len() > MAX_PLACES_IDS {
+        return HttpResponse::BadRequest().json(ResponseError::new(&format!(
+            "too many place IDs provided, maximum is {MAX_PLACES_IDS}"
+        )));
     }
 
     let mut resolved_ids: Vec<String> = Vec::new();
