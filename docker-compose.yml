@@ -1,30 +1,38 @@
 services:
-  localstack:
-    # Pinned to a Community (free) 3.x image. This service only needs sns/s3/sqs, which
-    # are all Community features. The `latest` (4.x) image hard-requires a valid Pro
-    # license. Switch to a newer tag / `latest` only if you have an active Pro license.
-    image: localstack/localstack:3.8
+  # AWS mock (S3 + SNS + SQS). moto is Apache-2.0 licensed and replaces LocalStack,
+  # which now requires a (paid) Pro license. Exposed on host port 4566 — moto listens
+  # on 5000 in-container — to match the service's default S3/SNS endpoints, so no app
+  # or test configuration changes are needed.
+  moto:
+    image: motoserver/moto:5.2.2
     ports:
-      - "4566:4566"
-    environment:
-      # Only consumed by Pro images; ignored by the Community image above.
-      # Provided via the host environment or a local .env file (never commit the value).
-      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
-      - SERVICES=sns,s3,sqs
-      - DEBUG=1
-      - DOCKER_HOST=unix:///var/run/docker.sock
-      - AWS_DEFAULT_REGION=us-west-2
-      - AWS_ACCESS_KEY_ID=test
-      - AWS_SECRET_ACCESS_KEY=test
-    volumes:
-      - ./localstack:/etc/localstack/init/ready.d
-      - /var/run/docker.sock:/var/run/docker.sock
+      - "4566:5000"
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:4566/health"]
-      interval: 10s
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/moto-api/')"]
+      interval: 5s
       timeout: 5s
       retries: 10
-      start_period: 10s
+      start_period: 5s
+
+  # One-shot job that creates the SNS topic and S3 bucket the service expects.
+  # moto holds state in memory, so these are recreated whenever the stack starts.
+  aws-init:
+    image: amazon/aws-cli:latest
+    depends_on:
+      moto:
+        condition: service_healthy
+    environment:
+      AWS_ACCESS_KEY_ID: test
+      AWS_SECRET_ACCESS_KEY: test
+      AWS_DEFAULT_REGION: us-west-2
+    entrypoint: /bin/sh
+    command:
+      - -c
+      - |
+        aws --endpoint-url=http://moto:5000 sns create-topic --name events || true
+        aws --endpoint-url=http://moto:5000 s3 mb s3://camera-reel || true
+        aws --endpoint-url=http://moto:5000 s3api put-bucket-acl --bucket camera-reel --acl public-read || true
+        echo "moto AWS resources created"
 
   postgres:
     container_name: "camera_reel_db"
