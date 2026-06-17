@@ -1,1 +1,6 @@
 /target
+
+# Local environment files — may contain secrets (e.g. LOCALSTACK_AUTH_TOKEN)
+.env
+.env.*
+!.env.example

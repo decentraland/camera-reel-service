@@ -6,6 +6,8 @@ services:
     ports:
       - "4566:4566"
     environment:
+      # Provided via the host environment or a local .env file (never commit the value).
+      - LOCALSTACK_AUTH_TOKEN=${LOCALSTACK_AUTH_TOKEN:-}
       - SERVICES=sns,s3,sqs
       - DEBUG=1
       - DOCKER_HOST=unix:///var/run/docker.sock
