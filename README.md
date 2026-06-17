@@ -140,10 +140,10 @@ See `.env.example` for available configuration options.
 
 In order to successfully run this server, external dependencies such as databases and storage must be provided.
 
-To do so, this repository provides you with a `docker-compose.dev.yml` file for that purpose. In order to get the environment set up, run:
+To do so, this repository provides you with a `docker-compose.yml` file for that purpose. In order to get the environment set up, run:
 
 ```bash
-docker-compose -f docker-compose.dev.yml up -d
+docker compose up -d
 ```
 
 Or using just (if installed):
@@ -154,8 +154,8 @@ just run-services
 
 This will start:
 
-- PostgreSQL database on port `5432`
-- MinIO (local S3) on port `9000` (API) and `9001` (Console)
+- PostgreSQL on port `5432`
+- [moto](https://github.com/getmoto/moto) (an Apache-2.0 AWS mock for S3/SNS/SQS) on port `4566`, pre-seeded with the `events` SNS topic and `camera-reel` S3 bucket
 
 #### Running in development mode
 

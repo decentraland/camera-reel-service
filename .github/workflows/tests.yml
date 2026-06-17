@@ -33,22 +33,21 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Start LocalStack
-        uses: LocalStack/setup-localstack@v0.2.2
-        with:
-          image-tag: "latest"
-          install-awslocal: "true"
-          configuration: DEBUG=1,SERVICES=sns,s3,sqs
-        env:
-          LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
+      - name: Start moto (AWS mock)
+        run: |
+          docker run -d --name moto -p 4566:5000 motoserver/moto:5.2.2
+          for i in $(seq 1 30); do
+            curl -sf http://localhost:4566/moto-api/ >/dev/null && { echo "moto is ready"; break; }
+            sleep 1
+          done
 
-      - name: Setup AWS resources in LocalStack
+      - name: Setup AWS resources in moto
         run: |
           # Create SNS topic
-          awslocal sns create-topic --name events --region us-west-2
+          aws --endpoint-url=http://localhost:4566 sns create-topic --name events --region us-west-2
           # Create S3 bucket
-          awslocal s3 mb s3://camera-reel
-          awslocal s3api put-bucket-acl --bucket camera-reel --acl public-read
+          aws --endpoint-url=http://localhost:4566 s3 mb s3://camera-reel
+          aws --endpoint-url=http://localhost:4566 s3api put-bucket-acl --bucket camera-reel --acl public-read
 
       - name: Run tests
         run: cargo test

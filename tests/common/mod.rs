@@ -16,7 +16,7 @@ use camera_reel_service::{
     sns::SNSPublisher,
     Environment, Settings,
 };
-use dcl_crypto::Identity;
+use dcl_crypto::{Account, Expiration, Identity};
 use rand::{distributions::Alphanumeric, Rng};
 use s3::{
     bucket_ops::CreateBucketResponse, creds::Credentials, Bucket, BucketConfiguration,
@@ -48,6 +48,16 @@ pub fn create_test_identity() -> dcl_crypto::Identity {
      ]
     }"#,
   ).unwrap()
+}
+
+/// Creates a valid signed identity for a *different* (random) signer than
+/// `create_test_identity`. Used to exercise authenticated-but-not-owner paths.
+pub fn create_other_identity() -> dcl_crypto::Identity {
+    let signer = Account::random();
+    Identity::from_signer(
+        &signer,
+        Expiration::try_from("3021-10-16T22:32:29.626Z").unwrap(),
+    )
 }
 
 fn create_string() -> String {
