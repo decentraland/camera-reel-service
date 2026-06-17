@@ -36,10 +36,14 @@ jobs:
       - name: Start LocalStack
         uses: LocalStack/setup-localstack@v0.2.2
         with:
-          image-tag: "latest"
+          # Community (free) pin. The 4.x `latest` image requires a valid Pro license;
+          # sns/s3/sqs are all free Community services, so no license is needed.
+          image-tag: "3.8"
           install-awslocal: "true"
           configuration: DEBUG=1,SERVICES=sns,s3,sqs
         env:
+          # Only used if you switch back to a Pro image with an active license;
+          # ignored by the Community image above.
           LOCALSTACK_AUTH_TOKEN: ${{ secrets.LOCALSTACK_AUTH_TOKEN }}
 
       - name: Setup AWS resources in LocalStack
