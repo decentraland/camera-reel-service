@@ -68,3 +68,6 @@ wiremock = "0.5"
 
 [[example]]
 name = "upload-image"
+
+[profile.release]
+strip = true

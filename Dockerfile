@@ -1,4 +1,4 @@
-FROM rust:1.86 AS chef
+FROM rust:1.86@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081 AS chef
 RUN cargo install --version 0.1.62 cargo-chef --locked
 
 WORKDIR /app
@@ -7,9 +7,7 @@ FROM chef AS planner
 COPY . .
 RUN cargo chef prepare --recipe-path recipe.json
 
-FROM chef AS builder 
-ARG PROJECT
-RUN apt update && apt-get install -y protobuf-compiler
+FROM chef AS builder
 COPY --from=planner /app/recipe.json recipe.json
 
 # Build dependencies - this is the caching Docker layer!
@@ -17,13 +15,18 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM debian:12-slim AS runtime
-RUN apt-get update && apt-get install -y \
+FROM debian:13-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime
+RUN apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates \
-    libssl3 \
+    libssl3t64 \
     && rm -rf /var/lib/apt/lists/*
 
-ARG PROJECT
+# Run as an unprivileged user
+RUN useradd --system --no-create-home --no-log-init --uid 10001 appuser
+
 COPY --from=builder /app/target/release/camera-reel-service /usr/local/bin/camera-reel-service
+
+USER appuser
+EXPOSE 3000
 
 ENTRYPOINT [ "/usr/local/bin/camera-reel-service" ]

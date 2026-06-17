@@ -1,0 +1,20 @@
+# Build artifacts (multi-GB) — never send to the Docker daemon
+target/
+
+# VCS / CI
+.git/
+.gitignore
+.github/
+
+# Local dev tooling, compose, and docs (not needed to build the binary)
+docker-compose*.yml
+run-docker.sh
+Dockerfile
+.dockerignore
+.env
+.env.*
+!.env.example
+docs/
+*.md
+.claude/
+data-*.csv
