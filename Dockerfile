@@ -1,4 +1,4 @@
-FROM rust:1.86 AS chef
+FROM rust:1.86@sha256:300ec56abce8cc9448ddea2172747d048ed902a3090e6b57babb2bf19f754081 AS chef
 RUN cargo install --version 0.1.62 cargo-chef --locked
 
 WORKDIR /app
@@ -15,7 +15,7 @@ RUN cargo chef cook --release --recipe-path recipe.json
 COPY . .
 RUN cargo build --release
 
-FROM debian:13-slim AS runtime
+FROM debian:13-slim@sha256:4e401d95de7083948053197a9c3913343cd06b706bf15eb6a0c3ccd26f436a0e AS runtime
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3t64 \
