@@ -42,48 +42,31 @@ async fn get_image(settings: Data<Settings>, image_id: Path<String>) -> impl Res
     context_path = "/api",
     responses(
         (status = 200, description = "Get image metadata", body = Image),
-        (status = 401, description = "Unauthorized"),
-        (status = 403, description = "Forbidden"),
         (status = 404, description = "Not found")
     )
 )]
 #[get("/images/{image_id}/metadata")]
-async fn get_metadata(
-    database: Data<Database>,
-    image_id: Path<String>,
-    request: HttpRequest,
-) -> impl Responder {
+async fn get_metadata(database: Data<Database>, image_id: Path<String>) -> impl Responder {
     let image_id = image_id.into_inner();
-    let image = match database.get_image(&image_id).await {
-        Ok(image) => image,
+    // A single image's metadata is public for every image. The image bytes are already
+    // served publicly (`GET /images/{id}` redirects to the public bucket) and sharing a
+    // photo is a first-class feature, so the photo and its metadata must be viewable by
+    // anyone who has the link. `is_public` only controls whether the image is listed in
+    // the user's public gallery (see `get_user_images`), not whether it can be viewed.
+    match database.get_image(&image_id).await {
+        Ok(image) => {
+            let image: Image = image.into();
+            HttpResponse::Ok().json(image)
+        }
         Err(sqlx::Error::ColumnDecode { source, .. }) => {
             tracing::debug!("Couldn't decode image metadata: {source:?}");
-            return HttpResponse::InternalServerError()
-                .json(ResponseError::new("couldn't decode image"));
+            HttpResponse::InternalServerError().json(ResponseError::new("couldn't decode image"))
         }
         Err(e) => {
             tracing::debug!("Image not found: {e:?}");
-            return HttpResponse::NotFound().json(ResponseError::new("image not found"));
-        }
-    };
-
-    // Private images expose sensitive metadata (visible people, scene location, realm,
-    // owner address), so they must only be served to their owner. Public images stay open.
-    if !image.is_public {
-        match AuthUser::extract(&request).await {
-            Ok(AuthUser { address }) => {
-                if !image.user_address.eq_ignore_ascii_case(&address) {
-                    return HttpResponse::Forbidden().json(ResponseError::new("forbidden"));
-                }
-            }
-            Err(_) => {
-                return HttpResponse::Unauthorized().json(ResponseError::new("unauthorized"));
-            }
+            HttpResponse::NotFound().json(ResponseError::new("image not found"))
         }
     }
-
-    let image: Image = image.into();
-    HttpResponse::Ok().json(image)
 }
 
 #[derive(Deserialize, Debug, IntoParams)]
@@ -299,8 +282,9 @@ async fn get_place_images(
             Ok(ids) => ids,
             Err(e) => {
                 tracing::error!("Failed to resolve world name '{}': {}", place_id, e);
-                return HttpResponse::BadGateway()
-                    .json(ResponseError::new(&format!("failed to resolve world name: {e}")));
+                return HttpResponse::BadGateway().json(ResponseError::new(&format!(
+                    "failed to resolve world name: {e}"
+                )));
             }
         };
 
@@ -422,8 +406,9 @@ async fn get_multiple_places_images(
                 Ok(ids) => resolved_ids.extend(ids),
                 Err(e) => {
                     tracing::error!("Failed to resolve world name '{}': {}", id, e);
-                    return HttpResponse::BadGateway()
-                        .json(ResponseError::new(&format!("failed to resolve world name: {e}")));
+                    return HttpResponse::BadGateway().json(ResponseError::new(&format!(
+                        "failed to resolve world name: {e}"
+                    )));
                 }
             }
         } else {
@@ -439,7 +424,10 @@ async fn get_multiple_places_images(
         });
     }
 
-    let Ok(images_count) = database.get_multiple_places_images_count(&resolved_ids).await else {
+    let Ok(images_count) = database
+        .get_multiple_places_images_count(&resolved_ids)
+        .await
+    else {
         return HttpResponse::NotFound().json(ResponseError::new("places not found"));
     };
 
