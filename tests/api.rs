@@ -201,16 +201,9 @@ async fn test_delete_image() {
 
     let id = upload_test_image("image.png", &address.to_string(), &place_id).await;
 
-    // The image is private, so its owner must authenticate to read the metadata.
-    let metadata_path = format!("/api/images/{id}/metadata");
-    let metadata_headers = get_signed_headers(create_test_identity(), "get", &metadata_path, "");
+    // Metadata is public for every image, so no auth is required to read it.
     let response = reqwest::Client::new()
-        .get(&format!("http://{}{}", address, metadata_path))
-        .header(metadata_headers[0].0.clone(), metadata_headers[0].1.clone())
-        .header(metadata_headers[1].0.clone(), metadata_headers[1].1.clone())
-        .header(metadata_headers[2].0.clone(), metadata_headers[2].1.clone())
-        .header(metadata_headers[3].0.clone(), metadata_headers[3].1.clone())
-        .header(metadata_headers[4].0.clone(), metadata_headers[4].1.clone())
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
         .await
         .unwrap();
@@ -282,17 +275,10 @@ async fn test_update_image_visibility() {
         .unwrap();
     assert!(response.status().is_success());
 
-    // Check if visibility was updated. The image is now private, so the owner must
-    // authenticate to read its metadata.
-    let metadata_path = format!("/api/images/{id}/metadata");
-    let metadata_headers = get_signed_headers(create_test_identity(), "get", &metadata_path, "");
+    // Check if visibility was updated. The image is now private, but its metadata stays
+    // publicly readable (privacy only hides it from the user's public gallery listing).
     let response = reqwest::Client::new()
-        .get(&format!("http://{}{}", address, metadata_path))
-        .header(metadata_headers[0].0.clone(), metadata_headers[0].1.clone())
-        .header(metadata_headers[1].0.clone(), metadata_headers[1].1.clone())
-        .header(metadata_headers[2].0.clone(), metadata_headers[2].1.clone())
-        .header(metadata_headers[3].0.clone(), metadata_headers[3].1.clone())
-        .header(metadata_headers[4].0.clone(), metadata_headers[4].1.clone())
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
         .await
         .unwrap();
@@ -362,21 +348,25 @@ async fn test_get_public_image_metadata_without_auth_succeeds() {
 }
 
 #[actix_web::test]
-async fn test_get_private_image_metadata_without_auth_is_unauthorized() {
+async fn test_get_private_image_metadata_without_auth_succeeds() {
     let (server, _) = create_test_server().await;
     let address = server.addr();
     let place_id = get_place_id();
 
     let id = upload_test_image("private-noauth.png", &address.to_string(), &place_id).await;
 
-    // Private image metadata must not be served to unauthenticated callers.
+    // A private image is still viewable by anyone with the link (privacy only hides it
+    // from the user's public gallery), so its metadata is served without auth. This is
+    // what powers sharing a photo to social networks.
     let response = reqwest::Client::new()
         .get(&format!("http://{}/api/images/{}/metadata", address, id))
         .send()
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 401);
+    assert!(response.status().is_success());
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, false);
 }
 
 #[actix_web::test]
@@ -407,14 +397,15 @@ async fn test_get_private_image_metadata_as_owner_succeeds() {
 }
 
 #[actix_web::test]
-async fn test_get_private_image_metadata_as_non_owner_is_forbidden() {
+async fn test_get_private_image_metadata_as_non_owner_succeeds() {
     let (server, _) = create_test_server().await;
     let address = server.addr();
     let place_id = get_place_id();
 
     let id = upload_test_image("private-other.png", &address.to_string(), &place_id).await;
 
-    // A different authenticated user must not read someone else's private metadata.
+    // A different authenticated user can also read the metadata: a photo is shareable
+    // regardless of who requests it. Authentication never changes the outcome here.
     let path = format!("/api/images/{id}/metadata");
     let headers = get_signed_headers(create_other_identity(), "get", &path, "");
     let response = reqwest::Client::new()
@@ -428,7 +419,9 @@ async fn test_get_private_image_metadata_as_non_owner_is_forbidden() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), 403);
+    assert!(response.status().is_success());
+    let image = response.json::<Image>().await.unwrap();
+    assert_eq!(image.is_public, false);
 }
 
 #[actix_web::test]
@@ -603,9 +596,7 @@ async fn test_get_place_images_eth_empty_places() {
     Mock::given(method("GET"))
         .and(path("/api/places"))
         .and(query_param("names", "empty-world.eth"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(places_response(0, vec![])),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(places_response(0, vec![])))
         .mount(&mock_server)
         .await;
 
@@ -666,8 +657,7 @@ async fn test_get_place_images_eth_with_pagination_params() {
         .and(path("/api/places"))
         .and(query_param("names", "paginated-world.eth"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(places_response(1, vec![place_id.as_str()])),
+            ResponseTemplate::new(200).set_body_json(places_response(1, vec![place_id.as_str()])),
         )
         .mount(&mock_server)
         .await;
@@ -677,12 +667,7 @@ async fn test_get_place_images_eth_with_pagination_params() {
 
     // Upload 5 public images
     for i in 0..5 {
-        upload_public_test_image(
-            &format!("eth-pg-{i}.png"),
-            &address.to_string(),
-            &place_id,
-        )
-        .await;
+        upload_public_test_image(&format!("eth-pg-{i}.png"), &address.to_string(), &place_id).await;
     }
 
     // Request with offset=2&limit=2
@@ -712,8 +697,7 @@ async fn test_get_place_images_eth_caches_resolution() {
         .and(path("/api/places"))
         .and(query_param("names", "cache-test.eth"))
         .respond_with(
-            ResponseTemplate::new(200)
-                .set_body_json(places_response(1, vec![place_id.as_str()])),
+            ResponseTemplate::new(200).set_body_json(places_response(1, vec![place_id.as_str()])),
         )
         .expect(1)
         .mount(&mock_server)
@@ -818,9 +802,7 @@ async fn test_post_multiple_places_images_eth_empty_world() {
     Mock::given(method("GET"))
         .and(path("/api/places"))
         .and(query_param("names", "empty-multi.eth"))
-        .respond_with(
-            ResponseTemplate::new(200).set_body_json(places_response(0, vec![])),
-        )
+        .respond_with(ResponseTemplate::new(200).set_body_json(places_response(0, vec![])))
         .mount(&mock_server)
         .await;
 
