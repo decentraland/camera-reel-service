@@ -40,7 +40,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 tracing-actix-web = "0.7"
 
 # decentraland
-dcl-crypto-middleware-rs = { version = "0.2.1", features = ["signed_fetch"] }
+dcl-crypto-middleware-rs = { version = "0.3.0", features = ["signed_fetch"] }
 dcl-crypto = "0.2.1"
 dcl-http-prom-metrics = "0.2.0"
 
