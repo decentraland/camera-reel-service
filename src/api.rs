@@ -117,6 +117,21 @@ pub struct User {
     pub is_guest: bool,
     #[serde(default)]
     pub is_emoting: Option<bool>,
+    /// Skipped rather than written as null so a photo taken by a client that does not report it keeps
+    /// the shape it has always had.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_rect: Option<ScreenRect>,
+}
+
+/// Where a visible person stands in the photo: normalized to the image, with the origin at its
+/// top-left corner. Measured by the explorer when the shot is taken, which is the only moment the
+/// avatar's bounds and the camera are both known.
+#[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, ToSchema)]
+pub struct ScreenRect {
+    pub x: f32,
+    pub y: f32,
+    pub width: f32,
+    pub height: f32,
 }
 
 impl From<DBImage> for Image {
@@ -193,5 +208,57 @@ impl ForbiddenError {
             reason: ForbiddenReason::MaxLimitReached,
             message: message.to_string(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const PERSON_WITH_RECT: &str = r#"{
+        "userName": "someone",
+        "userAddress": "0x1",
+        "wearables": [],
+        "isGuest": false,
+        "isEmoting": false,
+        "screenRect": { "x": 0.25, "y": 0.1, "width": 0.2, "height": 0.6 }
+    }"#;
+
+    const PERSON_WITHOUT_RECT: &str = r#"{
+        "userName": "someone",
+        "userAddress": "0x1",
+        "wearables": [],
+        "isGuest": false,
+        "isEmoting": false
+    }"#;
+
+    #[test]
+    fn keeps_the_screen_rect_a_photo_was_uploaded_with() {
+        let user: User = serde_json::from_str(PERSON_WITH_RECT).unwrap();
+
+        assert_eq!(
+            user.screen_rect,
+            Some(ScreenRect {
+                x: 0.25,
+                y: 0.1,
+                width: 0.2,
+                height: 0.6,
+            })
+        );
+
+        // The metadata is stored by re-serializing this struct, so what survives the round trip is what
+        // reaches the database.
+        let stored = serde_json::to_string(&user).unwrap();
+        assert!(stored.contains(r#""screenRect":{"x":0.25,"y":0.1,"width":0.2,"height":0.6}"#));
+    }
+
+    #[test]
+    fn accepts_a_photo_without_a_screen_rect_and_stores_no_null_for_it() {
+        let user: User = serde_json::from_str(PERSON_WITHOUT_RECT).unwrap();
+
+        assert_eq!(user.screen_rect, None);
+
+        let stored = serde_json::to_string(&user).unwrap();
+        assert!(!stored.contains("screenRect"));
     }
 }

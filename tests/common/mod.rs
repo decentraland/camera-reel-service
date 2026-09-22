@@ -9,7 +9,7 @@ use actix_web_lab::__reexports::serde_json;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sqs::{Client as SqsClient, Config as SqsConfig};
 use camera_reel_service::{
-    api::{self, upload::UploadResponse, Metadata, ResponseError},
+    api::{self, upload::UploadResponse, Metadata, ResponseError, User},
     database::{Database, DatabaseOptions},
     live,
     places_client::PlacesClient,
@@ -382,7 +382,13 @@ pub async fn create_test_server() -> (TestServer, TestContext) {
     (server, context)
 }
 
-async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id: &str) -> String {
+async fn upload_image(
+    file_name: &str,
+    address: &str,
+    is_public: bool,
+    place_id: &str,
+    visible_people: Vec<User>,
+) -> String {
     let identity = create_test_identity();
     // prepare image
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
@@ -396,6 +402,7 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id:
         user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
         place_id: place_id.to_string(),
         realm: "https://realm.org/v1".to_string(),
+        visible_people,
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
@@ -436,11 +443,21 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id:
 }
 
 pub async fn upload_test_image(file_name: &str, address: &str, place_id: &str) -> String {
-    upload_image(file_name, address, false, place_id).await
+    upload_image(file_name, address, false, place_id, vec![]).await
+}
+
+/// Uploads with people in the shot, for the metadata that describes them.
+pub async fn upload_test_image_with_people(
+    file_name: &str,
+    address: &str,
+    place_id: &str,
+    visible_people: Vec<User>,
+) -> String {
+    upload_image(file_name, address, false, place_id, visible_people).await
 }
 
 pub async fn upload_public_test_image(file_name: &str, address: &str, place_id: &str) -> String {
-    upload_image(file_name, address, true, place_id).await
+    upload_image(file_name, address, true, place_id, vec![]).await
 }
 
 pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String {

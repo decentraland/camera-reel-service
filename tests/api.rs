@@ -4,10 +4,11 @@ use camera_reel_service::api::{
         GetGalleryImagesResponse, GetImagesResponse, GetMultiplePlacesImagesResponse,
         GetPlaceImagesResponse, GetWearableImagesResponse, UserDataResponse,
     },
-    Image, Metadata, ResponseError,
+    Image, Metadata, ResponseError, ScreenRect, User,
 };
 use common::upload_test_failing_image;
 use common::upload_test_image;
+use common::upload_test_image_with_people;
 use common::{get_place_id, upload_public_test_image};
 use sqlx::types::Uuid;
 use wiremock::matchers::{method, path, query_param};
@@ -309,6 +310,53 @@ async fn test_get_wearable_images_refuses_a_malformed_item() {
     let response = get_wearable_images(&address, "not-an-item").await;
 
     assert_eq!(response.status(), 400);
+}
+
+#[actix_web::test]
+async fn test_visible_person_screen_rect_survives_storage() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let place_id = Uuid::new_v4().to_string();
+
+    let screen_rect = ScreenRect {
+        x: 0.25,
+        y: 0.1,
+        width: 0.2,
+        height: 0.6,
+    };
+
+    let id = upload_test_image_with_people(
+        "image.png",
+        &address.to_string(),
+        &place_id,
+        vec![User {
+            user_name: "someone".to_string(),
+            user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
+            wearables: vec![],
+            is_guest: false,
+            is_emoting: Some(false),
+            screen_rect: Some(screen_rect),
+        }],
+    )
+    .await;
+
+    // The metadata is stored by re-serializing it, so reading it back is what proves the field is kept
+    // rather than dropped on the way in.
+    let response = reqwest::Client::new()
+        .get(&format!("http://{}/api/images/{}/metadata", address, id))
+        .send()
+        .await
+        .unwrap();
+
+    assert!(response.status().is_success());
+
+    let image: Image = response.json().await.unwrap();
+
+    assert_eq!(image.metadata.visible_people.len(), 1);
+    assert_eq!(
+        image.metadata.visible_people[0].screen_rect,
+        Some(screen_rect)
+    );
 }
 
 #[actix_web::test]
