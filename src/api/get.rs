@@ -449,3 +449,107 @@ async fn get_multiple_places_images(
 
     HttpResponse::Ok().json(GetMultiplePlacesImagesResponse { images, place_data })
 }
+
+#[derive(Deserialize, Debug, IntoParams)]
+struct GetWearableImagesQuery {
+    #[serde(default = "default_offset")]
+    offset: u64,
+    #[serde(default = "default_limit")]
+    limit: u64,
+}
+
+#[derive(Deserialize, Serialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct GetWearableImagesResponse {
+    /// Full images rather than gallery rows: a consumer showing "people wearing this" needs who is in
+    /// the shot and where it was taken, and asking for the metadata of every photo it just received
+    /// would be one request per photo.
+    pub images: Vec<Image>,
+    pub max_images: u64,
+}
+
+/// `<contract>-<itemId>`, the identity the marketplace uses for an item. Checked before it reaches the
+/// database so a malformed id is a bad request rather than a scan that can only find nothing.
+fn is_item_id(value: &str) -> bool {
+    let Some((contract, item_id)) = value.split_once('-') else {
+        return false;
+    };
+
+    contract.len() == 42
+        && contract.starts_with("0x")
+        && contract[2..].chars().all(|c| c.is_ascii_hexdigit())
+        && !item_id.is_empty()
+        && item_id.chars().all(|c| c.is_ascii_digit())
+}
+
+#[tracing::instrument(skip(database))]
+#[utoipa::path(
+    tag = "images",
+    context_path = "/api",
+    params(
+        GetWearableImagesQuery
+    ),
+    responses(
+        (status = 200, description = "Public images of people wearing the item", body = GetWearableImagesResponse),
+        (status = 400, description = "Malformed item id", body = ResponseError),
+        (status = 500, description = "Internal Server Error", body = ResponseError)
+    )
+)]
+#[get("/wearables/{item}/images")]
+async fn get_wearable_images(
+    item: Path<String>,
+    query_params: Query<GetWearableImagesQuery>,
+    database: Data<Database>,
+) -> impl Responder {
+    let item = item.into_inner().to_lowercase();
+    let GetWearableImagesQuery { offset, limit } = query_params.into_inner();
+    let limit = limit.min(MAX_LIMIT);
+
+    if !is_item_id(&item) {
+        return HttpResponse::BadRequest().json(ResponseError::new(
+            "the item must be an item id, as `<contract>-<itemId>`",
+        ));
+    }
+
+    // Public only, and not by a filter the caller can lift: these are photos of other people, offered
+    // for an item rather than for the person in them.
+    let Ok(max_images) = database.get_wearable_images_count(&item).await else {
+        return HttpResponse::InternalServerError()
+            .json(ResponseError::new("failed to count the images of the item"));
+    };
+
+    let Ok(images) = database
+        .get_wearable_images(&item, offset as i64, limit as i64)
+        .await
+    else {
+        return HttpResponse::InternalServerError()
+            .json(ResponseError::new("failed to fetch the images of the item"));
+    };
+
+    let images = images.into_iter().map(Image::from).collect::<Vec<Image>>();
+
+    HttpResponse::Ok().json(GetWearableImagesResponse { images, max_images })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_item_id;
+
+    #[test]
+    fn accepts_a_marketplace_item_id() {
+        assert!(is_item_id("0x0bf152a83a6fc55066c2b664b164ca2916ad38f5-2"));
+        assert!(is_item_id("0x0BF152A83A6FC55066C2B664B164CA2916AD38F5-0"));
+    }
+
+    #[test]
+    fn refuses_anything_that_is_not_one() {
+        // A whole URN, a bare contract, a token id in place of an item id, and an empty half.
+        assert!(!is_item_id(
+            "urn:decentraland:matic:collections-v2:0x0bf152a83a6fc55066c2b664b164ca2916ad38f5:2"
+        ));
+        assert!(!is_item_id("0x0bf152a83a6fc55066c2b664b164ca2916ad38f5"));
+        assert!(!is_item_id("0x0bf152a83a6fc55066c2b664b164ca2916ad38f5-"));
+        assert!(!is_item_id("-2"));
+        assert!(!is_item_id("not-2"));
+    }
+}
