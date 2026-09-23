@@ -101,6 +101,13 @@ impl Database {
                 query_builder.push_bind(filter_value);
                 query_builder.push(")");
             }
+            "wearable_item" => {
+                // Matches the expression the GIN index is built on, so the array is read from the index
+                // rather than by walking every photo's metadata.
+                query_builder.push("image_wearable_items(metadata) && ARRAY[");
+                query_builder.push_bind(filter_value[0].to_lowercase());
+                query_builder.push("]::text[]");
+            }
             _ => {
                 tracing::error!("Unsupported filter field: {}", filter_field);
                 return Err(DBError::Protocol(format!(
@@ -198,6 +205,22 @@ impl Database {
         limit: i64,
     ) -> DBResult<Vec<DBImage>> {
         self.get_images("places_ids", places_ids, offset, limit, true)
+            .await
+    }
+
+    /// Public photos in which somebody is wearing the item, newest first.
+    pub async fn get_wearable_images(
+        &self,
+        item: &str,
+        offset: i64,
+        limit: i64,
+    ) -> DBResult<Vec<DBImage>> {
+        self.get_images("wearable_item", &[item.to_string()], offset, limit, true)
+            .await
+    }
+
+    pub async fn get_wearable_images_count(&self, item: &str) -> DBResult<u64> {
+        self.get_images_count("wearable_item", &[item.to_string()], true)
             .await
     }
 

@@ -2,9 +2,9 @@ use actix_web_lab::__reexports::serde_json;
 use camera_reel_service::api::{
     get::{
         GetGalleryImagesResponse, GetImagesResponse, GetMultiplePlacesImagesResponse,
-        GetPlaceImagesResponse, UserDataResponse,
+        GetPlaceImagesResponse, GetWearableImagesResponse, UserDataResponse,
     },
-    Image, ResponseError,
+    Image, Metadata, ResponseError,
 };
 use common::upload_test_failing_image;
 use common::upload_test_image;
@@ -191,6 +191,124 @@ async fn test_get_multiple_images_compact() {
         .unwrap();
 
     assert_eq!(images_response.user_data.current_images, 5);
+}
+
+const WORN_ITEM: &str = "0x0bf152a83a6fc55066c2b664b164ca2916ad38f5-2";
+
+/// A photo of somebody wearing the given URN, written straight to the database: the endpoint is about
+/// reading, and an upload would only add a multipart round trip between the fixture and the query.
+///
+/// The metadata is built from JSON rather than from a struct literal, so a field added to the schema
+/// later does not break a test that has nothing to do with it.
+async fn insert_photo_of_the_item(context: &common::TestContext, is_public: bool, wearable: &str) {
+    let metadata: Metadata = serde_json::from_value(serde_json::json!({
+        "userName": "someone",
+        "userAddress": "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5",
+        "dateTime": "1789615158",
+        "realm": "main",
+        "placeId": Uuid::new_v4().to_string(),
+        "scene": { "name": "Somewhere", "location": { "x": "0", "y": "0" } },
+        "visiblePeople": [{
+            "userName": "someone",
+            "userAddress": "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5",
+            "wearables": [wearable],
+            "isGuest": false,
+            "isEmoting": false
+        }]
+    }))
+    .unwrap();
+
+    let image = Image {
+        id: Uuid::new_v4().to_string(),
+        url: "https://camera-reel.decentraland.org/image.png".to_string(),
+        thumbnail_url: "https://camera-reel.decentraland.org/image-thumbnail.png".to_string(),
+        is_public,
+        metadata,
+    };
+
+    context.database.insert_image(&image).await.unwrap();
+}
+
+async fn get_wearable_images(address: &str, item: &str) -> reqwest::Response {
+    reqwest::Client::new()
+        .get(&format!("http://{}/api/wearables/{}/images", address, item))
+        .send()
+        .await
+        .unwrap()
+}
+
+#[actix_web::test]
+async fn test_get_wearable_images() {
+    let (server, context) = create_test_server().await;
+    let address = server.addr().to_string();
+
+    // Two copies of the same item, a different item, and the same item on a private photo.
+    insert_photo_of_the_item(
+        &context,
+        true,
+        "urn:decentraland:matic:collections-v2:0x0bf152a83a6fc55066c2b664b164ca2916ad38f5:2:105312291668557186697918027683670432318895095400549111254310977559",
+    )
+    .await;
+    insert_photo_of_the_item(
+        &context,
+        true,
+        "urn:decentraland:matic:collections-v2:0x0BF152A83A6FC55066C2B664B164CA2916AD38F5:2:7",
+    )
+    .await;
+    insert_photo_of_the_item(
+        &context,
+        true,
+        "urn:decentraland:matic:collections-v2:0x0bf152a83a6fc55066c2b664b164ca2916ad38f5:3:7",
+    )
+    .await;
+    insert_photo_of_the_item(
+        &context,
+        false,
+        "urn:decentraland:matic:collections-v2:0x0bf152a83a6fc55066c2b664b164ca2916ad38f5:2:9",
+    )
+    .await;
+
+    let response = get_wearable_images(&address, WORN_ITEM).await;
+    assert!(response.status().is_success());
+
+    let response: GetWearableImagesResponse = response.json().await.unwrap();
+
+    // The two public photos of that item, whatever token of it each avatar owns, and never the private
+    // one or the photo of the item next to it.
+    assert_eq!(response.max_images, 2);
+    assert_eq!(response.images.len(), 2);
+    assert!(response
+        .images
+        .iter()
+        .all(|image| image.metadata.visible_people[0].wearables[0]
+            .to_lowercase()
+            .contains("0x0bf152a83a6fc55066c2b664b164ca2916ad38f5:2:")));
+}
+
+#[actix_web::test]
+async fn test_get_wearable_images_of_an_item_nobody_wears() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr().to_string();
+
+    let response =
+        get_wearable_images(&address, "0x0bf152a83a6fc55066c2b664b164ca2916ad38f5-9").await;
+
+    assert!(response.status().is_success());
+
+    let response: GetWearableImagesResponse = response.json().await.unwrap();
+
+    assert_eq!(response.max_images, 0);
+    assert!(response.images.is_empty());
+}
+
+#[actix_web::test]
+async fn test_get_wearable_images_refuses_a_malformed_item() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr().to_string();
+
+    let response = get_wearable_images(&address, "not-an-item").await;
+
+    assert_eq!(response.status(), 400);
 }
 
 #[actix_web::test]
