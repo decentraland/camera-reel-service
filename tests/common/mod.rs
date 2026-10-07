@@ -9,7 +9,7 @@ use actix_web_lab::__reexports::serde_json;
 use aws_config::{BehaviorVersion, Region};
 use aws_sdk_sqs::{Client as SqsClient, Config as SqsConfig};
 use camera_reel_service::{
-    api::{self, upload::UploadResponse, Metadata, ResponseError},
+    api::{self, upload::UploadResponse, Metadata, ResponseError, User},
     database::{Database, DatabaseOptions},
     live,
     places_client::PlacesClient,
@@ -382,7 +382,13 @@ pub async fn create_test_server() -> (TestServer, TestContext) {
     (server, context)
 }
 
-async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id: &str) -> String {
+async fn upload_image(
+    file_name: &str,
+    address: &str,
+    is_public: bool,
+    place_id: &str,
+    visible_people: Vec<User>,
+) -> String {
     let identity = create_test_identity();
     // prepare image
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
@@ -396,6 +402,7 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id:
         user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
         place_id: place_id.to_string(),
         realm: "https://realm.org/v1".to_string(),
+        visible_people,
         ..Default::default()
     };
     let metadata_json = serde_json::to_vec(&metadata).unwrap();
@@ -436,11 +443,21 @@ async fn upload_image(file_name: &str, address: &str, is_public: bool, place_id:
 }
 
 pub async fn upload_test_image(file_name: &str, address: &str, place_id: &str) -> String {
-    upload_image(file_name, address, false, place_id).await
+    upload_image(file_name, address, false, place_id, vec![]).await
+}
+
+/// Uploads with people in the shot, for the metadata that describes them.
+pub async fn upload_test_image_with_people(
+    file_name: &str,
+    address: &str,
+    place_id: &str,
+    visible_people: Vec<User>,
+) -> String {
+    upload_image(file_name, address, false, place_id, visible_people).await
 }
 
 pub async fn upload_public_test_image(file_name: &str, address: &str, place_id: &str) -> String {
-    upload_image(file_name, address, true, place_id).await
+    upload_image(file_name, address, true, place_id, vec![]).await
 }
 
 pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String {
@@ -488,6 +505,49 @@ pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String
     let response: ResponseError = response.json().await.unwrap();
 
     response.get_message().to_string()
+}
+
+/// Uploads a photo with metadata as given, for metadata a `Metadata` cannot hold (a number too large
+/// for an `f32`, say). Returns the status and the error message, if any.
+pub async fn upload_raw_metadata(
+    address: &str,
+    metadata: serde_json::Value,
+) -> (reqwest::StatusCode, String) {
+    let identity = create_test_identity();
+    let image_bytes = include_bytes!("../resources/image.png").to_vec();
+    let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
+        .file_name("image.png".to_string())
+        .mime_str("image/png")
+        .unwrap();
+    let metadata_part = reqwest::multipart::Part::bytes(serde_json::to_vec(&metadata).unwrap())
+        .file_name("metadata.json")
+        .mime_str("application/json")
+        .unwrap();
+    let form = reqwest::multipart::Form::new()
+        .part("image", image_file_part)
+        .part("metadata", metadata_part);
+
+    let path = "/api/images";
+    let headers = get_signed_headers(identity, "post", path, "");
+    let response = reqwest::Client::new()
+        .post(format!("http://{address}{path}"))
+        .multipart(form)
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let message = response
+        .json::<ResponseError>()
+        .await
+        .map(|error| error.get_message().to_string())
+        .unwrap_or_default();
+    (status, message)
 }
 
 pub fn get_signed_headers(

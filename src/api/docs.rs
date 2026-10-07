@@ -32,6 +32,7 @@ use utoipa_swagger_ui::SwaggerUi;
             Scene,
             Location,
             User,
+            ScreenRect,
             Upload,
             UploadResponse,
             UpdateVisibility,
