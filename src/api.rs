@@ -134,6 +134,23 @@ pub struct ScreenRect {
     pub height: f32,
 }
 
+/// Slack for `x + width` and `y + height`: the explorer clamps the rect to the image, and the sum of
+/// two clamped floats can land a hair past 1.
+const SCREEN_RECT_EDGE_TOLERANCE: f32 = 1e-4;
+
+impl ScreenRect {
+    /// Whether the rect is a rectangle of the image. Anything else is refused on upload: a number too
+    /// large for an `f32` parses as infinity, is stored as `null`, and then breaks every feed that
+    /// reads the row back.
+    pub fn is_valid(&self) -> bool {
+        [self.x, self.y, self.width, self.height]
+            .iter()
+            .all(|v| v.is_finite() && (0.0..=1.0).contains(v))
+            && self.x + self.width <= 1.0 + SCREEN_RECT_EDGE_TOLERANCE
+            && self.y + self.height <= 1.0 + SCREEN_RECT_EDGE_TOLERANCE
+    }
+}
+
 impl From<DBImage> for Image {
     fn from(value: DBImage) -> Self {
         Self {
@@ -260,5 +277,42 @@ mod tests {
 
         let stored = serde_json::to_string(&user).unwrap();
         assert!(!stored.contains("screenRect"));
+    }
+
+    fn rect(x: f32, y: f32, width: f32, height: f32) -> ScreenRect {
+        ScreenRect {
+            x,
+            y,
+            width,
+            height,
+        }
+    }
+
+    #[test]
+    fn accepts_a_rect_of_the_image_including_the_empty_one_and_one_flush_with_its_edges() {
+        assert!(rect(0.25, 0.1, 0.2, 0.6).is_valid());
+        assert!(rect(0.0, 0.0, 0.0, 0.0).is_valid());
+        assert!(rect(0.3, 0.0, 0.7, 1.0).is_valid());
+    }
+
+    #[test]
+    fn refuses_a_rect_with_a_number_that_does_not_fit_an_f32() {
+        // serde parses a number above f32::MAX as infinity rather than failing.
+        let user: User = serde_json::from_str(
+            r#"{ "userName": "x", "userAddress": "0x1", "wearables": [], "isGuest": false,
+                "screenRect": { "x": 1e39, "y": 0.1, "width": 0.2, "height": 0.6 } }"#,
+        )
+        .unwrap();
+
+        assert!(!user.screen_rect.unwrap().is_valid());
+    }
+
+    #[test]
+    fn refuses_a_rect_outside_the_image() {
+        assert!(!rect(-0.1, 0.1, 0.2, 0.6).is_valid());
+        assert!(!rect(0.1, 0.1, 1000.0, 0.6).is_valid());
+        assert!(!rect(0.9, 0.1, 0.2, 0.6).is_valid());
+        assert!(!rect(0.1, 0.5, 0.2, 0.6).is_valid());
+        assert!(!rect(f32::NAN, 0.1, 0.2, 0.6).is_valid());
     }
 }

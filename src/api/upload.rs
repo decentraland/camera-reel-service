@@ -84,6 +84,14 @@ pub async fn upload_image(
         }
     };
 
+    if metadata
+        .visible_people
+        .iter()
+        .any(|person| person.screen_rect.is_some_and(|rect| !rect.is_valid()))
+    {
+        return HttpResponse::BadRequest().json(ResponseError::new("invalid metadata"));
+    }
+
     if metadata.user_address != auth_user.address {
         return HttpResponse::BadRequest().json(ResponseError::new("invalid user address"));
     }

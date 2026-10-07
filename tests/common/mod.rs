@@ -507,6 +507,49 @@ pub async fn upload_test_failing_image(file_name: &str, address: &str) -> String
     response.get_message().to_string()
 }
 
+/// Uploads a photo with metadata as given, for metadata a `Metadata` cannot hold (a number too large
+/// for an `f32`, say). Returns the status and the error message, if any.
+pub async fn upload_raw_metadata(
+    address: &str,
+    metadata: serde_json::Value,
+) -> (reqwest::StatusCode, String) {
+    let identity = create_test_identity();
+    let image_bytes = include_bytes!("../resources/image.png").to_vec();
+    let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
+        .file_name("image.png".to_string())
+        .mime_str("image/png")
+        .unwrap();
+    let metadata_part = reqwest::multipart::Part::bytes(serde_json::to_vec(&metadata).unwrap())
+        .file_name("metadata.json")
+        .mime_str("application/json")
+        .unwrap();
+    let form = reqwest::multipart::Form::new()
+        .part("image", image_file_part)
+        .part("metadata", metadata_part);
+
+    let path = "/api/images";
+    let headers = get_signed_headers(identity, "post", path, "");
+    let response = reqwest::Client::new()
+        .post(format!("http://{address}{path}"))
+        .multipart(form)
+        .header(headers[0].0.clone(), headers[0].1.clone())
+        .header(headers[1].0.clone(), headers[1].1.clone())
+        .header(headers[2].0.clone(), headers[2].1.clone())
+        .header(headers[3].0.clone(), headers[3].1.clone())
+        .header(headers[4].0.clone(), headers[4].1.clone())
+        .send()
+        .await
+        .unwrap();
+
+    let status = response.status();
+    let message = response
+        .json::<ResponseError>()
+        .await
+        .map(|error| error.get_message().to_string())
+        .unwrap_or_default();
+    (status, message)
+}
+
 pub fn get_signed_headers(
     identity: Identity,
     method: &str,
