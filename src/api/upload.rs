@@ -84,11 +84,13 @@ pub async fn upload_image(
         }
     };
 
-    if metadata
+    if let Some(rect) = metadata
         .visible_people
         .iter()
-        .any(|person| person.screen_rect.is_some_and(|rect| !rect.is_valid()))
+        .filter_map(|person| person.screen_rect)
+        .find(|rect| !rect.is_valid())
     {
+        tracing::warn!("refused an upload with an invalid screen rect: {:?}", rect);
         return HttpResponse::BadRequest().json(ResponseError::new("invalid metadata"));
     }
 

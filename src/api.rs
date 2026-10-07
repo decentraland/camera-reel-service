@@ -125,7 +125,9 @@ pub struct User {
 
 /// Where a visible person stands in the photo: normalized to the image, with the origin at its
 /// top-left corner. Measured by the explorer when the shot is taken, which is the only moment the
-/// avatar's bounds and the camera are both known.
+/// avatar's bounds and the camera are both known. Every field is in `0..=1`, but `x + width` and
+/// `y + height` may exceed 1 by up to 1e-4 (see `is_valid`), so a consumer that needs a strict
+/// rectangle of the image should clamp.
 #[derive(Deserialize, Serialize, Debug, Clone, Copy, PartialEq, ToSchema)]
 pub struct ScreenRect {
     pub x: f32,
