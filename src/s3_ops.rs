@@ -50,8 +50,8 @@ pub fn s3_credentials(
         (Some(_), None) | (None, Some(_)) => {
             Err("S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together".into())
         }
-        // The full chain probes EC2 IMDSv2 before the ECS container endpoint, and
-        // on Fargate that probe is a dead end taken while holding the write lock.
+        // Startup only: Credentials::refresh() re-runs the full default chain, so
+        // every rotation still probes EC2 IMDSv2 before the ECS container endpoint.
         (None, None) => {
             if std::env::var("AWS_CONTAINER_CREDENTIALS_RELATIVE_URI").is_ok() {
                 Ok(Credentials::from_instance_metadata()?)
@@ -83,16 +83,19 @@ mod tests {
         }
     }
 
-    #[tokio::test]
+    #[tokio::test(start_paused = true)]
     async fn reports_a_timeout_rather_than_waiting_forever() {
         let never = async {
             std::future::pending::<()>().await;
             Ok::<(), S3Error>(())
         };
 
-        let error = tokio::time::timeout(Duration::from_millis(50), with_s3_timeout(never)).await;
+        let error = with_s3_timeout(never).await.unwrap_err();
 
-        assert!(error.is_err(), "the helper should outlive a 50ms probe");
+        assert!(
+            matches!(error, S3OpError::Timeout(after) if after == S3_REQUEST_TIMEOUT),
+            "got: {error}"
+        );
     }
 
     #[tokio::test]
