@@ -88,13 +88,18 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             (Some(id), Some(secret)) => {
                 Credentials::new(Some(id), Some(secret), None, None, None)?
             }
-            _ => Credentials::default()?,
+            (Some(_), None) | (None, Some(_)) => {
+                return Err(
+                    "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together".into(),
+                )
+            }
+            (None, None) => Credentials::default()?,
         };
 
         (region, credentials)
     };
 
-    let bucket = Bucket::new(&args.s3_bucket_name, region, s3_credentials)?.with_path_style();
+    let bucket = *Bucket::new(&args.s3_bucket_name, region, s3_credentials)?.with_path_style();
 
     let s3_url = if !args.s3_url.ends_with('/') {
         args.s3_url.to_string()

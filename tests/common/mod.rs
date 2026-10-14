@@ -98,7 +98,7 @@ async fn create_bucket(bucket_name: &str) -> Bucket {
             .await
             .unwrap();
 
-    bucket
+    *bucket
 }
 
 async fn create_sns_topic() -> String {

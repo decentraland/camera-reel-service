@@ -23,7 +23,7 @@ sqlx = { version = "0.7", features = [
 
 
 # aws
-rust-s3 = "0.33"
+rust-s3 = "0.35"
 aws-config = { version = "1.1.7", features = ["behavior-version-latest"] }
 aws-sdk-sns = "1.84.0"
 aws-sdk-sqs = "1.83.0"
