@@ -34,11 +34,11 @@ pub struct Arguments {
     #[clap(long, env)]
     aws_sns_endpoint: Option<String>,
 
-    #[clap(long, env, default_value_t = String::from("test"))]
-    s3_access_key_id: String,
+    #[clap(long, env)]
+    s3_access_key_id: Option<String>,
 
-    #[clap(long, env, default_value_t = String::from("test"))]
-    s3_secret_access_key: String,
+    #[clap(long, env)]
+    s3_secret_access_key: Option<String>,
 
     #[clap(long, env, default_value_t = String::from("https://places.decentraland.org"))]
     places_api_url: String,
@@ -60,10 +60,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let aws_region = args.aws_region.clone();
 
-    // Use S3 credentials from arguments (defaults to "test" if not provided)
-    let s3_access_key = &args.s3_access_key_id;
-    let s3_secret_key = &args.s3_secret_access_key;
-
     let (region, s3_credentials) = if args.s3_url == LOCAL_S3 {
         let region = Region::Custom {
             region: args.aws_region,
@@ -71,14 +67,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         args.s3_url = format!("{}/{}", args.s3_url, args.s3_bucket_name);
 
-        let credentials =
-            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+        let credentials = Credentials::new(
+            Some(args.s3_access_key_id.as_deref().unwrap_or("test")),
+            Some(args.s3_secret_access_key.as_deref().unwrap_or("test")),
+            None,
+            None,
+            None,
+        )?;
 
         (region, credentials)
     } else {
         let region = args.aws_region.parse()?;
-        let credentials =
-            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+
+        // Without a static key, fall through to the provider chain, which on
+        // Fargate reaches the task role via the container credential endpoint.
+        let credentials = match (
+            args.s3_access_key_id.as_deref(),
+            args.s3_secret_access_key.as_deref(),
+        ) {
+            (Some(id), Some(secret)) => {
+                Credentials::new(Some(id), Some(secret), None, None, None)?
+            }
+            _ => Credentials::default()?,
+        };
 
         (region, credentials)
     };
