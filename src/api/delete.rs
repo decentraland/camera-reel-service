@@ -5,6 +5,8 @@ use actix_web::{
 };
 use s3::Bucket;
 
+use crate::s3_ops::with_s3_timeout;
+
 use crate::{
     api::{auth::AuthUser, ResponseError},
     database::Database,
@@ -60,7 +62,7 @@ pub async fn delete_image(
 
     match image.url.split('/').last() {
         Some(image_file_name) => {
-            if let Err(error) = bucket.delete_object(image_file_name).await {
+            if let Err(error) = with_s3_timeout(bucket.delete_object(image_file_name)).await {
                 tracing::error!("failed to delete image from bucket: {}", error);
                 return HttpResponse::InternalServerError()
                     .json(ResponseError::new("failed to delete image"));
@@ -73,7 +75,7 @@ pub async fn delete_image(
 
     match image.thumbnail_url.split('/').last() {
         Some(thumbnail_file_name) => {
-            if let Err(error) = bucket.delete_object(thumbnail_file_name).await {
+            if let Err(error) = with_s3_timeout(bucket.delete_object(thumbnail_file_name)).await {
                 tracing::error!("failed to delete thumbnail image from bucket: {}", error);
                 return HttpResponse::InternalServerError()
                     .json(ResponseError::new("failed to delete thumbnail image"));

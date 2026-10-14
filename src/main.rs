@@ -1,5 +1,6 @@
 use camera_reel_service::places_client::PlacesClient;
 use camera_reel_service::sns::SNSPublisher;
+use camera_reel_service::s3_ops::{s3_credentials, CREDENTIALS_REQUEST_TIMEOUT};
 use camera_reel_service::{database::Database, run, Context, Environment, Settings};
 use clap::Parser;
 use s3::{creds::Credentials, Bucket, Region};
@@ -34,11 +35,11 @@ pub struct Arguments {
     #[clap(long, env)]
     aws_sns_endpoint: Option<String>,
 
-    #[clap(long, env, default_value_t = String::from("test"))]
-    s3_access_key_id: String,
+    #[clap(long, env)]
+    s3_access_key_id: Option<String>,
 
-    #[clap(long, env, default_value_t = String::from("test"))]
-    s3_secret_access_key: String,
+    #[clap(long, env)]
+    s3_secret_access_key: Option<String>,
 
     #[clap(long, env, default_value_t = String::from("https://places.decentraland.org"))]
     places_api_url: String,
@@ -60,30 +61,36 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let aws_region = args.aws_region.clone();
 
-    // Use S3 credentials from arguments (defaults to "test" if not provided)
-    let s3_access_key = &args.s3_access_key_id;
-    let s3_secret_key = &args.s3_secret_access_key;
+    // Applies to every credential fetch, including the refresh on each request.
+    s3::creds::set_request_timeout(Some(CREDENTIALS_REQUEST_TIMEOUT));
 
-    let (region, s3_credentials) = if args.s3_url == LOCAL_S3 {
+    let (region, credentials) = if args.s3_url == LOCAL_S3 {
         let region = Region::Custom {
             region: args.aws_region,
             endpoint: args.s3_url.to_owned(),
         };
         args.s3_url = format!("{}/{}", args.s3_url, args.s3_bucket_name);
 
-        let credentials =
-            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+        let credentials = Credentials::new(
+            Some(args.s3_access_key_id.as_deref().unwrap_or("test")),
+            Some(args.s3_secret_access_key.as_deref().unwrap_or("test")),
+            None,
+            None,
+            None,
+        )?;
 
         (region, credentials)
     } else {
         let region = args.aws_region.parse()?;
-        let credentials =
-            Credentials::new(Some(&s3_access_key), Some(&s3_secret_key), None, None, None)?;
+        let credentials = s3_credentials(
+            args.s3_access_key_id.as_deref(),
+            args.s3_secret_access_key.as_deref(),
+        )?;
 
         (region, credentials)
     };
 
-    let bucket = Bucket::new(&args.s3_bucket_name, region, s3_credentials)?.with_path_style();
+    let bucket = *Bucket::new(&args.s3_bucket_name, region, credentials)?.with_path_style();
 
     let s3_url = if !args.s3_url.ends_with('/') {
         args.s3_url.to_string()

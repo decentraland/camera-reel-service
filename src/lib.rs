@@ -19,6 +19,7 @@ use crate::sns::SNSPublisher;
 pub mod api;
 pub mod database;
 pub mod places_client;
+pub mod s3_ops;
 pub mod sns;
 
 #[derive(Debug)]
