@@ -1,5 +1,6 @@
 use camera_reel_service::places_client::PlacesClient;
 use camera_reel_service::sns::SNSPublisher;
+use camera_reel_service::s3_ops::{s3_credentials, CREDENTIALS_REQUEST_TIMEOUT};
 use camera_reel_service::{database::Database, run, Context, Environment, Settings};
 use clap::Parser;
 use s3::{creds::Credentials, Bucket, Region};
@@ -60,7 +61,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let aws_region = args.aws_region.clone();
 
-    let (region, s3_credentials) = if args.s3_url == LOCAL_S3 {
+    // Applies to every credential fetch, including the refresh on each request.
+    s3::creds::set_request_timeout(Some(CREDENTIALS_REQUEST_TIMEOUT));
+
+    let (region, credentials) = if args.s3_url == LOCAL_S3 {
         let region = Region::Custom {
             region: args.aws_region,
             endpoint: args.s3_url.to_owned(),
@@ -78,28 +82,15 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         (region, credentials)
     } else {
         let region = args.aws_region.parse()?;
-
-        // Without a static key, fall through to the provider chain, which on
-        // Fargate reaches the task role via the container credential endpoint.
-        let credentials = match (
+        let credentials = s3_credentials(
             args.s3_access_key_id.as_deref(),
             args.s3_secret_access_key.as_deref(),
-        ) {
-            (Some(id), Some(secret)) => {
-                Credentials::new(Some(id), Some(secret), None, None, None)?
-            }
-            (Some(_), None) | (None, Some(_)) => {
-                return Err(
-                    "S3_ACCESS_KEY_ID and S3_SECRET_ACCESS_KEY must be set together".into(),
-                )
-            }
-            (None, None) => Credentials::default()?,
-        };
+        )?;
 
         (region, credentials)
     };
 
-    let bucket = *Bucket::new(&args.s3_bucket_name, region, s3_credentials)?.with_path_style();
+    let bucket = *Bucket::new(&args.s3_bucket_name, region, credentials)?.with_path_style();
 
     let s3_url = if !args.s3_url.ends_with('/') {
         args.s3_url.to_string()

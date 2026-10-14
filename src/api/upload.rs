@@ -5,6 +5,8 @@ use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
 use image::guess_format;
 use s3::Bucket;
+
+use crate::s3_ops::with_s3_timeout;
 use serde::{Deserialize, Serialize};
 use sqlx::types::{chrono, Uuid};
 use utoipa::ToSchema;
@@ -150,22 +152,24 @@ pub async fn upload_image(
     let image_name = format!("{image_id}-{image_file_name}");
     let thumbnail_name = format!("{image_id}-thumbnail-{image_file_name}");
 
-    if let Err(error) = bucket
-        .put_object_with_content_type(image_name.clone(), image_bytes, content_type.as_str())
-        .await
+    if let Err(error) = with_s3_timeout(bucket.put_object_with_content_type(
+        image_name.clone(),
+        image_bytes,
+        content_type.as_str(),
+    ))
+    .await
     {
         tracing::error!("failed to upload image: {}", error);
         return HttpResponse::InternalServerError()
             .json(ResponseError::new("failed to upload image"));
     }
 
-    if let Err(error) = bucket
-        .put_object_with_content_type(
-            thumbnail_name.clone(),
-            thumbnail.get_ref(),
-            content_type.as_str(),
-        )
-        .await
+    if let Err(error) = with_s3_timeout(bucket.put_object_with_content_type(
+        thumbnail_name.clone(),
+        thumbnail.get_ref(),
+        content_type.as_str(),
+    ))
+    .await
     {
         tracing::error!("failed to upload thumbnail image: {}", error);
         return HttpResponse::InternalServerError()
