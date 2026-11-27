@@ -141,7 +141,7 @@ pub async fn upload_image(
             buffer
         }
         Err(error) => {
-            tracing::error!("failed to parse image: {}", error);
+            tracing::warn!("failed to parse image: {}", error);
             return HttpResponse::BadRequest().json(ResponseError::new("invalid image"));
         }
     };
@@ -334,7 +334,7 @@ mod tests {
     #[test]
     fn refuses_a_lossless_jpeg() {
         let bytes = include_bytes!("../../tests/resources/lossless-16bit.jpg");
-        assert!(decode_with_limits(bytes, ImageFormat::Jpeg).is_err());
+        assert_eq!(unsupported_jpeg_reason(bytes), Some("lossless JPEG"));
     }
 
     fn jpeg_with_scans(scans: usize) -> Vec<u8> {
