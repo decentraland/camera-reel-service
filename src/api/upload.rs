@@ -125,6 +125,7 @@ pub async fn upload_image(
     };
 
     if !matches!(format, ImageFormat::Png | ImageFormat::Jpeg) {
+        tracing::warn!("rejected an upload with unsupported format: {:?}", format);
         return HttpResponse::BadRequest().json(ResponseError::new("unsupported image format"));
     }
 
@@ -250,8 +251,10 @@ pub async fn upload_image(
 }
 
 fn decode_with_limits(image_bytes: &[u8], format: ImageFormat) -> Result<DynamicImage, String> {
-    if format == ImageFormat::Jpeg && !is_plain_jpeg(image_bytes) {
-        return Err("unsupported JPEG".to_string());
+    if format == ImageFormat::Jpeg {
+        if let Some(reason) = unsupported_jpeg_reason(image_bytes) {
+            return Err(reason.to_string());
+        }
     }
 
     let mut limits = Limits::default();
@@ -264,17 +267,27 @@ fn decode_with_limits(image_bytes: &[u8], format: ImageFormat) -> Result<Dynamic
     reader.decode().map_err(|error| error.to_string())
 }
 
-fn is_plain_jpeg(image_bytes: &[u8]) -> bool {
+/// Returns why a JPEG must be rejected before decoding, or `None` when it is safe to decode.
+/// Lossless and multi-scan JPEGs allocate far more than their reported output size.
+fn unsupported_jpeg_reason(image_bytes: &[u8]) -> Option<&'static str> {
     let mut decoder = jpeg_decoder::Decoder::new(image_bytes);
+    if decoder.read_info().is_err() {
+        return Some("unparseable JPEG header");
+    }
+    if decoder
+        .info()
+        .is_some_and(|info| info.coding_process == jpeg_decoder::CodingProcess::Lossless)
+    {
+        return Some("lossless JPEG");
+    }
     let scans = image_bytes
         .windows(2)
         .filter(|pair| *pair == [0xFF, 0xDA])
         .count();
-    decoder.read_info().is_ok()
-        && decoder
-            .info()
-            .is_some_and(|info| info.coding_process != jpeg_decoder::CodingProcess::Lossless)
-        && scans <= MAX_JPEG_SCANS
+    if scans > MAX_JPEG_SCANS {
+        return Some("too many JPEG scans");
+    }
+    None
 }
 
 #[cfg(test)]
@@ -344,6 +357,9 @@ mod tests {
 
     #[test]
     fn refuses_a_jpeg_with_13_scans() {
-        assert!(!is_plain_jpeg(&jpeg_with_scans(13)));
+        assert_eq!(
+            unsupported_jpeg_reason(&jpeg_with_scans(13)),
+            Some("too many JPEG scans")
+        );
     }
 }
