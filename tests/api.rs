@@ -6,6 +6,7 @@ use camera_reel_service::api::{
     },
     Image, Metadata, ResponseError, ScreenRect, User,
 };
+use common::upload_raw_image;
 use common::upload_raw_metadata;
 use common::upload_test_failing_image;
 use common::upload_test_image;
@@ -350,6 +351,42 @@ async fn test_upload_refuses_a_screen_rect_that_does_not_fit_an_f32() {
 
     assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
     assert_eq!(message, "invalid metadata");
+}
+
+fn encode(image: image::DynamicImage, format: image::ImageFormat) -> Vec<u8> {
+    let mut bytes = std::io::Cursor::new(vec![]);
+    image.write_to(&mut bytes, format).unwrap();
+    bytes.into_inner()
+}
+
+#[actix_web::test]
+async fn test_upload_refuses_a_gif_sent_as_png() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let gif = encode(
+        image::DynamicImage::ImageRgba8(image::RgbaImage::new(16, 16)),
+        image::ImageFormat::Gif,
+    );
+
+    let (status, message) = upload_raw_image(&address.to_string(), gif, "image/png").await;
+
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(message, "unsupported image format");
+}
+
+#[actix_web::test]
+async fn test_upload_refuses_an_image_over_the_decode_limit() {
+    let (server, _) = create_test_server().await;
+    let address = server.addr();
+    let png = encode(
+        image::DynamicImage::ImageRgba8(image::RgbaImage::new(2048, 2049)),
+        image::ImageFormat::Png,
+    );
+
+    let (status, message) = upload_raw_image(&address.to_string(), png, "image/png").await;
+
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST);
+    assert_eq!(message, "invalid image");
 }
 
 #[actix_web::test]

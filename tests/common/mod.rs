@@ -513,11 +513,33 @@ pub async fn upload_raw_metadata(
     address: &str,
     metadata: serde_json::Value,
 ) -> (reqwest::StatusCode, String) {
-    let identity = create_test_identity();
     let image_bytes = include_bytes!("../resources/image.png").to_vec();
+    upload_raw(address, image_bytes, "image/png", metadata).await
+}
+
+pub async fn upload_raw_image(
+    address: &str,
+    image_bytes: Vec<u8>,
+    content_type: &str,
+) -> (reqwest::StatusCode, String) {
+    let metadata = serde_json::to_value(Metadata {
+        user_address: "0x7949f9f239d1a0816ce5eb364a1f588ae9cc1bf5".to_string(),
+        ..Default::default()
+    })
+    .unwrap();
+    upload_raw(address, image_bytes, content_type, metadata).await
+}
+
+async fn upload_raw(
+    address: &str,
+    image_bytes: Vec<u8>,
+    content_type: &str,
+    metadata: serde_json::Value,
+) -> (reqwest::StatusCode, String) {
+    let identity = create_test_identity();
     let image_file_part = reqwest::multipart::Part::bytes(image_bytes)
         .file_name("image.png".to_string())
-        .mime_str("image/png")
+        .mime_str(content_type)
         .unwrap();
     let metadata_part = reqwest::multipart::Part::bytes(serde_json::to_vec(&metadata).unwrap())
         .file_name("metadata.json")

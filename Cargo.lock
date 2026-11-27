@@ -1361,6 +1361,7 @@ dependencies = [
  "dcl-crypto-middleware-rs",
  "dcl-http-prom-metrics",
  "image",
+ "jpeg-decoder",
  "moka",
  "rand 0.8.5",
  "reqwest",

@@ -3,7 +3,7 @@ use std::io::Cursor;
 use actix_multipart::form::{bytes::Bytes, text::Text, MultipartForm};
 use actix_web::{post, web::Data, HttpResponse, Responder};
 use actix_web_lab::__reexports::serde_json;
-use image::guess_format;
+use image::{guess_format, io::Limits, io::Reader as ImageReader, DynamicImage, ImageFormat};
 use s3::Bucket;
 
 use crate::s3_ops::with_s3_timeout;
@@ -19,6 +19,10 @@ use crate::{
     Settings,
 };
 use std::collections::HashMap;
+
+const MAX_IMAGE_DIMENSION: u32 = 4096;
+const MAX_DECODE_ALLOC: u64 = 16 * 1024 * 1024;
+const MAX_JPEG_SCANS: usize = 12;
 
 #[derive(MultipartForm, Debug, ToSchema)]
 pub struct Upload {
@@ -120,7 +124,12 @@ pub async fn upload_image(
         return HttpResponse::BadRequest().json(ResponseError::new("invalid image format"));
     };
 
-    let thumbnail = match image::load_from_memory_with_format(image_bytes, format) {
+    if !matches!(format, ImageFormat::Png | ImageFormat::Jpeg) {
+        tracing::warn!("rejected an upload with unsupported format: {:?}", format);
+        return HttpResponse::BadRequest().json(ResponseError::new("unsupported image format"));
+    }
+
+    let thumbnail = match decode_with_limits(image_bytes, format) {
         Ok(image) => {
             let thumbnail = image.thumbnail(640, 360);
             let mut buffer = Cursor::new(vec![]);
@@ -132,7 +141,7 @@ pub async fn upload_image(
             buffer
         }
         Err(error) => {
-            tracing::error!("failed to parse image: {}", error);
+            tracing::warn!("failed to parse image: {}", error);
             return HttpResponse::BadRequest().json(ResponseError::new("invalid image"));
         }
     };
@@ -239,4 +248,118 @@ pub async fn upload_image(
     };
     let response = UploadResponse { image, user_data };
     HttpResponse::Ok().json(response)
+}
+
+fn decode_with_limits(image_bytes: &[u8], format: ImageFormat) -> Result<DynamicImage, String> {
+    if format == ImageFormat::Jpeg {
+        if let Some(reason) = unsupported_jpeg_reason(image_bytes) {
+            return Err(reason.to_string());
+        }
+    }
+
+    let mut limits = Limits::default();
+    limits.max_image_width = Some(MAX_IMAGE_DIMENSION);
+    limits.max_image_height = Some(MAX_IMAGE_DIMENSION);
+    limits.max_alloc = Some(MAX_DECODE_ALLOC);
+
+    let mut reader = ImageReader::with_format(Cursor::new(image_bytes), format);
+    reader.limits(limits);
+    reader.decode().map_err(|error| error.to_string())
+}
+
+/// Returns why a JPEG must be rejected before decoding, or `None` when it is safe to decode.
+/// Lossless and multi-scan JPEGs allocate far more than their reported output size.
+fn unsupported_jpeg_reason(image_bytes: &[u8]) -> Option<&'static str> {
+    let mut decoder = jpeg_decoder::Decoder::new(image_bytes);
+    if decoder.read_info().is_err() {
+        return Some("unparseable JPEG header");
+    }
+    if decoder
+        .info()
+        .is_some_and(|info| info.coding_process == jpeg_decoder::CodingProcess::Lossless)
+    {
+        return Some("lossless JPEG");
+    }
+    let scans = image_bytes
+        .windows(2)
+        .filter(|pair| *pair == [0xFF, 0xDA])
+        .count();
+    if scans > MAX_JPEG_SCANS {
+        return Some("too many JPEG scans");
+    }
+    None
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use image::{Rgb, RgbImage};
+
+    fn jpeg(width: u32, height: u32) -> Vec<u8> {
+        let image =
+            DynamicImage::ImageRgb8(RgbImage::from_pixel(width, height, Rgb([90, 120, 150])));
+        let mut bytes = Cursor::new(vec![]);
+        image.write_to(&mut bytes, ImageFormat::Jpeg).unwrap();
+        bytes.into_inner()
+    }
+
+    #[test]
+    fn decodes_an_explorer_sized_jpeg() {
+        assert!(decode_with_limits(&jpeg(1920, 1080), ImageFormat::Jpeg).is_ok());
+    }
+
+    #[test]
+    fn decodes_a_progressive_jpeg() {
+        let bytes = include_bytes!("../../tests/resources/fall-autumn-red-season.jpg");
+        assert!(decode_with_limits(bytes, ImageFormat::Jpeg).is_ok());
+    }
+
+    #[test]
+    fn refuses_a_jpeg_over_the_decode_limit() {
+        assert!(decode_with_limits(&jpeg(2400, 2400), ImageFormat::Jpeg).is_err());
+    }
+
+    #[test]
+    fn refuses_an_image_wider_than_the_dimension_cap() {
+        let bytes = jpeg(MAX_IMAGE_DIMENSION + 1, 1);
+        assert!(decode_with_limits(&bytes, ImageFormat::Jpeg).is_err());
+    }
+
+    #[test]
+    fn refuses_an_image_taller_than_the_dimension_cap() {
+        let bytes = jpeg(1, MAX_IMAGE_DIMENSION + 1);
+        assert!(decode_with_limits(&bytes, ImageFormat::Jpeg).is_err());
+    }
+
+    #[test]
+    fn refuses_a_lossless_jpeg() {
+        let bytes = include_bytes!("../../tests/resources/lossless-16bit.jpg");
+        assert_eq!(unsupported_jpeg_reason(bytes), Some("lossless JPEG"));
+    }
+
+    fn jpeg_with_scans(scans: usize) -> Vec<u8> {
+        let mut bytes = jpeg(8, 8);
+        let sos = bytes
+            .windows(2)
+            .position(|pair| pair == [0xFF, 0xDA])
+            .unwrap();
+        let length = u16::from_be_bytes([bytes[sos + 2], bytes[sos + 3]]) as usize;
+        let header = bytes[sos..sos + 2 + length].to_vec();
+        let end = bytes.len() - 2;
+        bytes.splice(end..end, header.repeat(scans - 1));
+        bytes
+    }
+
+    #[test]
+    fn decodes_a_jpeg_with_12_scans() {
+        assert!(decode_with_limits(&jpeg_with_scans(12), ImageFormat::Jpeg).is_ok());
+    }
+
+    #[test]
+    fn refuses_a_jpeg_with_13_scans() {
+        assert_eq!(
+            unsupported_jpeg_reason(&jpeg_with_scans(13)),
+            Some("too many JPEG scans")
+        );
+    }
 }
